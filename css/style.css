@@ -169,7 +169,7 @@ textarea.text-in { margin-top: 10px; }
 /* ───── الرئيسية ───── */
 .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .me { display: flex; align-items: center; gap: 8px; text-align: start; }
-.me span { display: flex; flex-direction: column; line-height: 1.15; }
+.me > span:not(.av) { display: flex; flex-direction: column; line-height: 1.15; }
 .me small { color: var(--muted); font-size: 13px; }
 .me b { color: var(--deep); }
 .room-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px; border-radius: 20px; text-align: start; }
