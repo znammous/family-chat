@@ -449,7 +449,7 @@
       `${esc(o.id === uid() ? 'أنت' : o.name)} ${ROLE_BADGE[o.role] ? `<em class="role">${ROLE_BADGE[o.role]}</em>` : ''}`)).join('');
     app.innerHTML = `<div class="page home">
       <header class="room-top">
-        <button class="back" data-act="close" aria-label="رجوع">→</button>
+        <button class="back" data-act="close" aria-label="رجوع"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M13 5l7 7-7 7"/></svg></button>
         <span class="av-wrap">${Art.avatar(u.avatar)}${online(u) ? '<i class="online"></i>' : ''}</span>
         <span class="rt-main"><b>دردشات ${esc(u.name)}</b><small>👀 تشاهد محادثاته الخاصة للاطلاع فقط</small></span>
       </header>
@@ -479,7 +479,7 @@
     }
     app.innerHTML = `<div class="room">
       <header class="room-top">
-        <button class="back" data-act="close" aria-label="رجوع">→</button>
+        <button class="back" data-act="close" aria-label="رجوع"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M13 5l7 7-7 7"/></svg></button>
         ${icon}
         <span class="rt-main"><b>${esc(roomTitle(r))}</b><small id="roomSub">${sub}</small></span>
       </header>
@@ -491,13 +491,13 @@
         <button class="ic" data-act="photoMenu" data-arg="chat" aria-label="صورة">📷</button>
         <textarea id="txt" rows="1" maxlength="3000" placeholder="اكتب رسالة…"></textarea>
         <button class="ic mic" data-act="recStart" aria-label="تسجيل صوت">🎤</button>
-        <button class="send" data-act="sendText" aria-label="إرسال">➤</button>
+        <button class="send" data-act="sendText" aria-label="إرسال"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 4.5 3.6 11.2c-.8.3-.8 1.4 0 1.7L21 19.5c.6.2 1.1-.4.9-1L19.3 12l2.6-6.5c.2-.6-.3-1.2-.9-1z"/></svg></button>
       </footer>
       <footer class="composer recbar" id="recBar" hidden>
         <button class="ic" data-act="recCancel" aria-label="إلغاء">🗑️</button>
         <span class="rec-dot"></span><b class="rec-time" id="recTime">0:00</b>
         <span class="rec-hint">جارٍ التسجيل… تكلّم الآن 🎙️</span>
-        <button class="send" data-act="recSend" aria-label="إرسال التسجيل">➤</button>
+        <button class="send" data-act="recSend" aria-label="إرسال التسجيل"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 4.5 3.6 11.2c-.8.3-.8 1.4 0 1.7L21 19.5c.6.2 1.1-.4.9-1L19.3 12l2.6-6.5c.2-.6-.3-1.2-.9-1z"/></svg></button>
       </footer>` : ''}
     </div>`;
     refreshRoom(true);
