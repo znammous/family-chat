@@ -545,10 +545,10 @@
       ${canSend(r) ? `<div class="panel" id="panel" hidden></div>
       <div class="reply-bar" id="replyBar" hidden></div>
       <footer class="composer">
-        <button class="ic" data-act="panel" aria-label="إيموجي وملصقات">😊</button>
-        <button class="ic" data-act="photoMenu" data-arg="chat" aria-label="صورة">📷</button>
+        <button class="ic" data-act="panel" aria-label="إيموجي وملصقات"><i class="e-smile">😊</i></button>
+        <button class="ic" data-act="photoMenu" data-arg="chat" aria-label="صورة"><i class="e-cam">📷</i></button>
         <textarea id="txt" rows="1" maxlength="3000" placeholder="اكتب رسالة…"></textarea>
-        <button class="ic mic" data-act="recStart" aria-label="تسجيل صوت">🎤</button>
+        <button class="ic mic" data-act="recStart" aria-label="تسجيل صوت"><i class="e-mic">🎤</i></button>
         <button class="send" data-act="sendText" aria-label="إرسال"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 4.5 3.6 11.2c-.8.3-.8 1.4 0 1.7L21 19.5c.6.2 1.1-.4.9-1L19.3 12l2.6-6.5c.2-.6-.3-1.2-.9-1z"/></svg></button>
       </footer>
       <footer class="composer recbar" id="recBar" hidden>

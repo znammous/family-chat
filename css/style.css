@@ -264,6 +264,11 @@ textarea.text-in { margin-top: 10px; }
 
 .composer { display: flex; align-items: flex-end; gap: 4px; padding: 8px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); background: rgba(255, 255, 255, .96); border-radius: 24px 24px 0 0; box-shadow: 0 -3px 12px rgba(0, 0, 0, .08); }
 .composer .ic { width: 42px; height: 42px; display: grid; place-items: center; padding: 0; line-height: 1; font-size: 24px; border-radius: 50%; flex-shrink: 0; cursor: pointer; }
+/* إيموجي الأزرار ترتفع داخل سطرها بمقادير مختلفة؛ ننزلها لتتوسط الدائرة على مستوى واحد */
+.composer .ic > i { font-style: normal; display: block; pointer-events: none; }
+.composer .e-smile { transform: translateY(4px); }
+.composer .e-cam { transform: translateY(1.3px); }
+.composer .e-mic { transform: translateY(3.3px); }
 .composer .ic:active { background: var(--primary-light); }
 .composer textarea { flex: 1; min-width: 0; resize: none; border: 2.5px solid var(--line); border-radius: 22px; padding: 8px 14px; font-size: 17px; max-height: 120px; outline: none; background: #fff; line-height: 1.4; }
 .composer textarea:focus { border-color: var(--primary); }
