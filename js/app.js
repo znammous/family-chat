@@ -291,8 +291,8 @@
       <div class="tab-body">${body}</div>
       <nav class="tabbar">
         <button class="tab ${tab === 'chats' ? 'on' : ''}" data-act="tab" data-arg="chats">💬<span>الدردشات</span>${chatsN ? `<i class="dot-n">${chatsN}</i>` : ''}</button>
-        <button class="tab ${tab === 'news' ? 'on' : ''}" data-act="tab" data-arg="news">📰<span>الأخبار</span>${newsN ? `<i class="dot-n">${newsN}</i>` : ''}</button>
-        <button class="tab ${tab === 'family' ? 'on' : ''}" data-act="tab" data-arg="family">👨‍👩‍👧‍👦<span>العائلة</span></button>
+        <button class="tab ${tab === 'news' ? 'on' : ''}" data-act="tab" data-arg="news">📣<span>الأخبار</span>${newsN ? `<i class="dot-n">${newsN}</i>` : ''}</button>
+        <button class="tab ${tab === 'family' ? 'on' : ''}" data-act="tab" data-arg="family">🏡<span>العائلة</span></button>
       </nav>
     </div>`;
     if (tab === 'news') markRead('news');
