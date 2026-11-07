@@ -1,0 +1,12 @@
+{
+  "name": "family-chat-functions",
+  "description": "تنبيهات مجلس العائلة (Web Push) عند وصول رسالة جديدة",
+  "main": "index.js",
+  "engines": { "node": "22" },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.3.0",
+    "web-push": "^3.6.7"
+  },
+  "private": true
+}
