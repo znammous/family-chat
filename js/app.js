@@ -637,6 +637,8 @@
   const REC_MAX = 60;
   let rec = null;      // { mr, stream, chunks, start, timer, cancel }
   let player = null;   // { id, audio }
+  const PLAY_IC = '<svg viewBox="0 0 24 24" fill="#fff"><path d="M8.5 5.2v13.6c0 .8.9 1.3 1.6.8l10-6.8c.6-.4.6-1.2 0-1.6l-10-6.8c-.7-.5-1.6 0-1.6.8z"/></svg>';
+  const PAUSE_IC = '<svg viewBox="0 0 24 24" fill="#fff"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg>';
   const fmt = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
   // mp4 أولاً لأنه يعمل على آيفون وأندرويد معاً
   const recType = () => ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
@@ -645,7 +647,7 @@
   function voiceBubble(m) {
     const on = player && player.id === m.id;
     return `<button class="voice ${on && !player.audio.paused ? 'playing' : ''}" data-act="playVoice" data-arg="${room}|${m.id}" data-aud="${m.id}">
-      <span class="v-btn">${on && !player.audio.paused ? '⏸️' : '▶️'}</span>
+      <span class="v-btn">${on && !player.audio.paused ? PAUSE_IC : PLAY_IC}</span>
       <span class="v-wave">${'<i></i>'.repeat(18)}</span>
       <span class="v-dur">${fmt(m.dur || 0)}</span>
     </button>`;
@@ -655,7 +657,7 @@
       const on = player && player.id === el.dataset.aud;
       const playing = on && !player.audio.paused;
       el.classList.toggle('playing', playing);
-      el.querySelector('.v-btn').textContent = playing ? '⏸️' : '▶️';
+      el.querySelector('.v-btn').innerHTML = playing ? PAUSE_IC : PLAY_IC;
       const a = on ? player.audio : null;
       const p = a && a.duration && isFinite(a.duration) ? a.currentTime / a.duration : 0;
       el.style.setProperty('--p', on ? p : 0);

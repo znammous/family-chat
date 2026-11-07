@@ -327,7 +327,8 @@ html[data-look="arnooba"] .modal-bg { background: rgba(120, 60, 110, .45); }
 
 /* ───── الرسائل الصوتية ───── */
 .voice { --p: 0; display: flex; align-items: center; gap: 8px; min-width: 210px; padding: 4px 2px; direction: ltr; }
-.v-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--primary); font-size: 18px; flex-shrink: 0; box-shadow: 0 3px 0 var(--primary-dark); }
+.v-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--primary); flex-shrink: 0; box-shadow: 0 3px 0 var(--primary-dark); }
+.v-btn svg { display: block; width: 22px; height: 22px; }
 .v-wave { flex: 1; display: flex; align-items: center; gap: 3px; height: 30px; position: relative; }
 .v-wave i { flex: 1; border-radius: 3px; background: var(--muted); opacity: .35; height: 30%; }
 .v-wave i:nth-child(3n) { height: 70%; } .v-wave i:nth-child(4n+1) { height: 50%; } .v-wave i:nth-child(5n+2) { height: 90%; }
