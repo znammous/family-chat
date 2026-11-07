@@ -25,7 +25,7 @@ const Cloud = (() => {
   let status = 'loading';
   let fb = null, user = null, fid = null, joining = false;
   let memberUnsub = null, usersUnsub = null, cfgUnsub = null, memberData = null;
-  let config = {};   // إعدادات ولي الأمر: { dmOff }
+  let config = {};   // إعدادات ولي الأمر: { dmOff, groups }
   let users = {}, usersReady = false;
   const rooms = {};   // غرفة ← { unsub, limit, msgs, ready }
   const listeners = [];
@@ -210,6 +210,31 @@ const Cloud = (() => {
   // ولي الأمر يوقف الرسائل الخاصة أو يعيدها
   const setDmOff = off => fb.fs.setDoc(famDoc('chatConfig', 'settings'), { dmOff: !!off }, { merge: true });
 
+  // ───── المجموعات ─────
+  // مجموعات للعائلة كلها ينشئها ولي الأمر (مثل «أغراض البيت»)، تُحفظ في chatConfig/settings.groups
+  // ومعرّف غرفتها g_{معرّف}، والقواعد لا تسمح بقراءتها إلا ما دامت موجودة هنا
+  const groups = () => Object.entries(config.groups || {})
+    .map(([id, g]) => ({ id, name: g.name || '', icon: g.icon || '💬', at: g.at || 0 }))
+    .sort((a, b) => a.at - b.at);
+  function addGroup(name, icon) {
+    const bytes = crypto.getRandomValues(new Uint8Array(10));
+    const id = 'g_' + Array.from(bytes, b => ALPHABET[b % ALPHABET.length]).join('');
+    const g = { name: String(name).slice(0, 40), icon: String(icon || '💬').slice(0, 16), at: Date.now() };
+    return fb.fs.setDoc(famDoc('chatConfig', 'settings'), { groups: { [id]: g } }, { merge: true }).then(() => id);
+  }
+  const renameGroup = (id, name) => fb.fs.updateDoc(famDoc('chatConfig', 'settings'), { [`groups.${id}.name`]: String(name).slice(0, 40) });
+  // حذف المجموعة: نزيلها من الإعدادات ثم نحذف رسائلها
+  async function removeGroup(id) {
+    await fb.fs.updateDoc(famDoc('chatConfig', 'settings'), { ['groups.' + id]: fb.fs.deleteField() });
+    if (rooms[id]) { if (rooms[id].unsub) rooms[id].unsub(); delete rooms[id]; }
+    const snap = await fb.fs.getDocs(famCol('chatRooms', id, 'messages'));
+    for (let i = 0; i < snap.docs.length; i += 400) {
+      const b = fb.fs.writeBatch(fb.db);
+      snap.docs.slice(i, i + 400).forEach(d => b.delete(d.ref));
+      await b.commit();
+    }
+  }
+
   // ───── الغرف والرسائل ─────
   // كل غرفة تُتابَع بآخر limit رسالة؛ الغرفة المفتوحة تُتابَع بعدد أكبر
   function watch(room, limit = 40) {
@@ -252,6 +277,7 @@ const Cloud = (() => {
 
   return {
     start, signIn, signOut, join, createCode, saveProfile, beat, removeMember, setDmOff,
+    groups, addGroup, renameGroup, removeGroup,
     watch, msgsOf, send, react, edit, remove,
     on: fn => listeners.push(fn),
     status: () => status,

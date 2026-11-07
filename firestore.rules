@@ -59,11 +59,15 @@ service cloud.firestore {
         allow delete: if isMember(fid) && request.auth.uid == uid;
       }
 
-      // الغرف: family للعائلة كلها، news للأخبار، dm_{uid}_{uid} محادثة خاصة بين اثنين فقط
+      // الغرف: family للعائلة كلها، news للأخبار، dm_{uid}_{uid} محادثة خاصة بين اثنين فقط،
+      // و g_{معرّف} مجموعة للعائلة كلها ينشئها ولي الأمر في chatConfig/settings.groups
       // (ولي الأمر يصل إلى كل شيء بالقاعدة العامة أعلاه)
       function inRoom(room) {
         return room == 'family' || room == 'news'
-          || (room.matches('dm_[A-Za-z0-9]+_[A-Za-z0-9]+') && request.auth.uid in room.split('_'));
+          || (room.matches('dm_[A-Za-z0-9]+_[A-Za-z0-9]+') && request.auth.uid in room.split('_'))
+          || (room.matches('g_[A-Za-z0-9]+')
+              && exists(/databases/$(database)/documents/families/$(fid)/chatConfig/settings)
+              && room in get(/databases/$(database)/documents/families/$(fid)/chatConfig/settings).data.get('groups', {}));
       }
       function validMsg() {
         let d = request.resource.data;
@@ -78,7 +82,7 @@ service cloud.firestore {
           && (!('dur' in d) || (d.dur is number && d.dur > 0 && d.dur <= 61))
           && (!('reacts' in d) || (d.reacts is map && d.reacts.size() == 0));
       }
-      // إعدادات المجلس: يكتبها ولي الأمر (بالقاعدة العامة)، ويقرؤها كل أفراد العائلة
+      // إعدادات المجلس (dmOff والمجموعات groups): يكتبها ولي الأمر (بالقاعدة العامة)، ويقرؤها كل أفراد العائلة
       match /chatConfig/{doc} {
         allow read: if isMember(fid);
       }

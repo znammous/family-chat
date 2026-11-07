@@ -99,21 +99,26 @@
   const COLORS = ['#e0701a', '#1b7a45', '#cc3a76', '#3a76cf', '#8a47ad', '#13807c', '#b8500c', '#a32a5b'];
   const colorOf = id => COLORS[[...String(id)].reduce((n, c) => n + c.charCodeAt(0), 0) % COLORS.length];
 
+  // المجموعات: غرف للعائلة كلها ينشئها ولي الأمر، معرّفها يبدأ بـ g_
+  const isGroup = r => r.startsWith('g_');
+  const groupOf = r => Cloud.groups().find(g => g.id === r);
+
   function roomTitle(r) {
     if (r === 'family') return '🏡 بيت العائلة';
     if (r === 'news') return '📰 أخبار العائلة';
+    if (isGroup(r)) { const g = groupOf(r); return g ? `${g.icon} ${g.name}` : 'مجموعة محذوفة'; }
     const peers = dmPeers(r);
     if (!peers.includes(uid())) return peers.map(nameOf).join(' و ');
     return nameOf(peers.find(p => p !== uid()) || uid());
   }
-  const canWrite = r => r === 'family' || r === 'news' || dmPeers(r).includes(uid());
+  const canWrite = r => r === 'family' || r === 'news' || (isGroup(r) ? !!groupOf(r) : dmPeers(r).includes(uid()));
   // الرسائل الخاصة يوقفها ولي الأمر، وتبقى المحادثة معه هو متاحة
   const dmOpen = r => !r.startsWith('dm_') || isParent() || !Cloud.dmOff() || dmPeers(r).includes(Cloud.fid());
   const canSend = r => canWrite(r) && dmOpen(r);
 
   // كل الغرف التي نتابعها: العائلة والأخبار ومحادثاتي الخاصة، وولي الأمر يرى محادثات الأبناء أيضاً
   function allRooms() {
-    const list = ['family', 'news'];
+    const list = ['family', 'news'].concat(Cloud.groups().map(g => g.id));
     const ids = Object.keys(users());
     others().forEach(u => list.push(dmId(uid(), u.id)));
     if (isParent()) {
@@ -296,7 +301,7 @@
       ? '<div class="card empty"><p>🔒 أوقف ولي الأمر الرسائل الخاصة حالياً، ويمكنك مراسلته هو.</p><p class="muted small">تكلّم مع الجميع في «بيت العائلة» 🏡</p></div>' : '';
     const famIcon = `<span class="av family-av">🏡</span>`;
     let h = `<div class="falfoula-talk">${Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'happy', 'talk')}<p>${greeting()}</p></div>`;
-    h += `<div class="card list">${roomRow('family', famIcon, '🏡 بيت العائلة')}</div>`;
+    h += `<div class="card list">${roomRow('family', famIcon, '🏡 بيت العائلة')}${groupRows()}</div>`;
     h += '<h3 class="section">💌 رسائل خاصة</h3>' + dmNote;
     if (!fam.length && dmNote) {
       // لا شيء آخر نعرضه
@@ -310,6 +315,9 @@
     }
     return h;
   }
+  const groupIcon = g => `<span class="av family-av">${esc(g.icon)}</span>`;
+  const groupRows = () => Cloud.groups().slice().sort((a, b) => lastAt(b.id) - lastAt(a.id))
+    .map(g => roomRow(g.id, groupIcon(g), esc(roomTitle(g.id)))).join('');
   const lastAt = r => { const m = Cloud.msgsOf(r); return m.length ? m[m.length - 1].at : 0; };
 
   const GREETINGS = [
@@ -392,7 +400,7 @@
       ${isParent() && u.id !== uid() ? `<button class="btn small blue" data-act="peek" data-arg="${u.id}" aria-label="محادثات ${esc(u.name)}">👀</button>` : ''}
       ${isParent() && u.id !== uid() ? `<button class="link-btn danger small" data-act="removeMember" data-arg="${u.id}">فصل</button>` : ''}
     </li>`).join('')}</ul></div>`;
-    if (isParent()) h += addMemberBox() + kidsChats();
+    if (isParent()) h += addMemberBox() + groupsBox() + kidsChats();
     h += `<div class="card"><h3>⚙️ الإعدادات</h3>
       <div class="setting"><span>🔔 تنبيه عند وصول رسالة</span><button class="switch ${notifyOn() ? 'on' : ''}" data-act="toggleNotify"><i></i></button></div>
       <div class="setting"><span>🔊 الأصوات</span><button class="switch ${ls.get('family-chat-muted', false) ? '' : 'on'}" data-act="toggleMute"><i></i></button></div>
@@ -401,6 +409,26 @@
       <a class="btn plain wide" href="${HEROES}">🌟 عالم الأبطال: ألعاب العائلة</a>
       <button class="link-btn danger" data-act="signOut">${isParent() ? 'تسجيل الخروج من هذا الجهاز' : 'فصل هذا الجهاز عن مجلس العائلة'}</button></div>`;
     return h;
+  }
+
+  // ولي الأمر ينشئ مجموعات للعائلة كلها ويعيد تسميتها ويحذفها
+  const GROUP_ICONS = ['🛒', '🏠', '🍽️', '📚', '🧹', '🎂', '✈️', '⚽', '🎮', '💊', '🚗', '💬'];
+  let groupIconPick = GROUP_ICONS[0];
+  function groupsBox() {
+    const list = Cloud.groups();
+    return `<div class="card"><h3>🗂️ مجموعات العائلة</h3>
+      <p class="muted small">مجموعة يدخلها كل أفراد العائلة، مثل «أغراض البيت» أو «رحلة الصيف»، وتظهر في الدردشات تحت «بيت العائلة».</p>
+      ${list.length ? `<ul class="members">${list.map(g => `<li>
+        ${groupIcon(g)}
+        <span class="m-main"><b>${esc(g.name)}</b><small>${preview(Cloud.msgsOf(g.id).slice(-1)[0])}</small></span>
+        <button class="btn small pink" data-act="open" data-arg="${g.id}" aria-label="افتح ${esc(g.name)}">💬</button>
+        <button class="btn small blue" data-act="renameGroup" data-arg="${g.id}" aria-label="إعادة تسمية ${esc(g.name)}">✏️</button>
+        <button class="link-btn danger small" data-act="removeGroup" data-arg="${g.id}">حذف</button>
+      </li>`).join('')}</ul>` : ''}
+      <input id="groupName" class="text-in" maxlength="40" placeholder="اسم المجموعة (مثال: أغراض البيت)">
+      <div class="chips" id="groupIcon">${GROUP_ICONS.map(e =>
+        `<button class="chip icon-chip ${e === groupIconPick ? 'on' : ''}" data-act="groupIcon" data-arg="${e}">${e}</button>`).join('')}</div>
+      <button class="btn green wide" data-act="addGroup">➕ أنشئ المجموعة</button></div>`;
   }
 
   function addMemberBox() {
@@ -470,6 +498,10 @@
       sub = Object.values(users()).map(u => esc(u.name)).join('، ');
     } else if (r === 'news') {
       icon = '<span class="av family-av">📰</span>'; sub = '';
+    } else if (isGroup(r)) {
+      const g = groupOf(r);
+      icon = `<span class="av family-av">${esc(g ? g.icon : '💬')}</span>`;
+      sub = Object.values(users()).map(u => esc(u.name)).join('، ');
     } else {
       const peers = dmPeers(r);
       const other = userOf(peers.find(p => p !== uid())) || userOf(peers[0]);
@@ -517,7 +549,7 @@
     if (!box) return;
     const near = first || box.scrollHeight - box.scrollTop - box.clientHeight < 120;
     const msgs = Cloud.msgsOf(room);
-    const group = room === 'family' || !dmPeers(room).includes(uid());
+    const group = room === 'family' || isGroup(room) || !dmPeers(room).includes(uid());
     let h = '', lastDay = '', lastFrom = '';
     if (!msgs.length) {
       h = Cloud.roomReady(room)
@@ -1190,6 +1222,32 @@
       setTimeout(() => { if (mine()) { pairing = null; refresh(); } }, exp - Date.now() + 500);
     },
     cancelPair() { pairing = null; render(); },
+
+    groupIcon(e) {
+      groupIconPick = e;
+      document.querySelectorAll('#groupIcon .chip').forEach(b => b.classList.toggle('on', b.dataset.arg === e));
+    },
+    addGroup() {
+      const name = $('groupName').value.trim();
+      if (!name) { toast('✏️ اكتب اسم المجموعة أولاً'); $('groupName').focus(); return; }
+      $('groupName').value = '';
+      $('groupName').blur();
+      Cloud.addGroup(name, groupIconPick).catch(() => toast('⚠️ تعذّر إنشاء المجموعة، تأكد من الإنترنت'));
+      Sound.pop();
+      toast(`🎉 أُنشئت مجموعة ${groupIconPick} ${name}`);
+    },
+    renameGroup(id) {
+      const g = groupOf(id);
+      if (!g) return;
+      const name = (prompt('الاسم الجديد للمجموعة:', g.name) || '').trim();
+      if (!name || name === g.name) return;
+      Cloud.renameGroup(id, name).catch(() => toast('⚠️ تعذّرت إعادة التسمية'));
+    },
+    removeGroup(id) {
+      const g = groupOf(id);
+      if (!g || !confirm(`حذف مجموعة «${g.name}»؟ ستُحذف رسائلها كلها ولا يمكن استرجاعها.`)) return;
+      Cloud.removeGroup(id).then(() => toast('🗑️ حُذفت المجموعة')).catch(() => toast('⚠️ تعذّر حذف المجموعة'));
+    },
     removeMember(id) {
       if (!confirm(`فصل ${nameOf(id)} عن العائلة؟ سيُفصل جهازه عن المجلس وعن ألعاب العائلة أيضاً، وتبقى رسائله.`)) return;
       Cloud.removeMember(id).then(() => toast('تم الفصل')).catch(() => toast('⚠️ تعذّر الفصل'));
@@ -1271,8 +1329,12 @@
       return;
     }
     if (what === 'config') {
+      // نتابع غرف المجموعات الجديدة بعد انتهاء هذا التحديث: فتح متابعة جديدة داخله يُضيع على Firestore الكتابة المعلّقة
+      if (Cloud.me()) setTimeout(watchAll, 0);
+      // حذف ولي الأمر المجموعة المفتوحة: نغلقها
+      if (room && isGroup(room) && !groupOf(room)) { toast('🗑️ حُذفت هذه المجموعة'); history.back(); return; }
       // تغيّر إذن الرسائل الخاصة: نعيد رسم الغرفة فقط إن تغيّر ظهور خانة الكتابة
-      if (room && $('msgs')) { if (!!$('txt') !== canSend(room)) render(); }
+      if (room && $('msgs')) { if (!!$('txt') !== canSend(room)) render(); else { const t = document.querySelector('.room-top .rt-main b'); if (t) t.textContent = roomTitle(room); } }
       else refresh();
       return;
     }
