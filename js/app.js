@@ -420,10 +420,10 @@
       <span class="m-main"><b>${esc(u.name)}${u.id === uid() ? ' (أنت)' : ''}</b><small>${roleBadge(u) ? roleBadge(u) + ' · ' : ''}${u.id === uid() ? 'متصل الآن' : ago(u.seen || 0)}</small></span>
       ${u.id !== uid() && dmOpen(dmWith(u.id)) ? `<button class="btn small pink" data-act="open" data-arg="${dmWith(u.id)}">💌</button>` : ''}
       ${isParent() && u.id !== uid() ? `<button class="btn small blue" data-act="peek" data-arg="${u.id}" aria-label="محادثات ${esc(u.name)}">👀</button>` : ''}
-      ${isParent() && u.id !== uid() && u.id !== Cloud.fid() && u.role === 'adult' ? (Cloud.isGuardian(u.id)
-        ? `<button class="link-btn small" data-act="revokeGuardian" data-arg="${u.id}">سحب الصلاحيات</button>`
+      ${isParent() && u.id !== uid() && u.id !== Cloud.fid() ? `<div class="m-tools">${u.role === 'adult' ? (Cloud.isGuardian(u.id)
+        ? `<button class="link-btn small" data-act="revokeGuardian" data-arg="${u.id}">سحب صلاحيات ولي الأمر</button>`
         : `<button class="link-btn small" data-act="grantGuardian" data-arg="${u.id}">👑 منح صلاحيات ولي الأمر</button>`) : ''}
-      ${isParent() && u.id !== uid() && u.id !== Cloud.fid() ? `<button class="link-btn danger small" data-act="removeMember" data-arg="${u.id}">فصل</button>` : ''}
+        <button class="link-btn danger small" data-act="removeMember" data-arg="${u.id}">فصل</button></div>` : ''}
     </li>`).join('')}</ul></div>`;
     if (isParent()) h += formerBox() + addMemberBox() + groupsBox() + kidsChats();
     h += `<div class="card"><h3>⚙️ الإعدادات</h3>
