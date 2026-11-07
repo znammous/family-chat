@@ -1,0 +1,114 @@
+rules_version = '2';
+// قواعد مشروع Firebase المشترك (tablehero-d582b) بين جدول الأبطال وأبطال الغابة وأبطال الإملاء وشات العائلة.
+// تُنشر بـ: firebase deploy --only firestore:rules --project tablehero-d582b
+// هذا الملف متطابق في المشاريع الأربعة: أي تعديل فيه يُنسخ إليها كلها قبل النشر.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // كل عائلة معرّفها هو معرّف حساب ولي الأمر (uid)، ويمكن إضافة أولياء أمور آخرين في parents
+    function isParent(fid) {
+      return request.auth != null && (
+        request.auth.uid == fid ||
+        (exists(/databases/$(database)/documents/families/$(fid)) &&
+         request.auth.uid in get(/databases/$(database)/documents/families/$(fid)).data.get('parents', []))
+      );
+    }
+
+    // جهاز طفل انضم برمز من ولي الأمر (حساب مجهول)
+    function isMember(fid) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/families/$(fid)/members/$(request.auth.uid));
+    }
+
+    function pairCode(code) {
+      return get(/databases/$(database)/documents/pairCodes/$(code)).data;
+    }
+
+    match /families/{fid} {
+      allow read, write: if isParent(fid);
+      match /{sub=**} {
+        allow read, write: if isParent(fid);
+      }
+
+      // أجهزة الأطفال تصل إلى بيانات أبطال الغابة وأبطال الإملاء فقط
+      match /apps/{app} {
+        allow read, write: if app in ['jungleHero', 'jungleDuel', 'jungleOnline', 'spellingHero', 'spellingDuel', 'spellingOnline'] && isMember(fid);
+      }
+
+      // الجهاز يسجّل نفسه برمز صالح لهذه العائلة، ويستطيع حذف نفسه.
+      // السجل مشترك بين التطبيقات على نفس النطاق: apps.{التطبيق} = طفل الجهاز في كل تطبيق
+      function validMember(fid) {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['code', 'kid', 'name', 'at', 'apps'])
+          && d.name is string && d.name.size() <= 40
+          && d.kid is string && d.kid.size() <= 40
+          && (!('apps' in d) || (d.apps is map && d.apps.size() <= 10))
+          && d.code is string && d.code.size() == 8
+          && exists(/databases/$(database)/documents/pairCodes/$(d.code))
+          && pairCode(d.code).fid == fid
+          && pairCode(d.code).exp > request.time;
+      }
+      // ───── شات العائلة ─────
+      // ملف كل فرد في الشات: يكتبه صاحبه فقط، ويقرؤه كل أفراد العائلة
+      match /chatUsers/{uid} {
+        allow read: if isMember(fid);
+        allow create, update: if isMember(fid) && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['name', 'avatar', 'role', 'look', 'seen', 'at'])
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 30
+          && request.resource.data.avatar is string && request.resource.data.avatar.size() <= 40
+          && request.resource.data.role in ['kid', 'adult'];
+        allow delete: if isMember(fid) && request.auth.uid == uid;
+      }
+
+      // الغرف: family للعائلة كلها، news للأخبار، dm_{uid}_{uid} محادثة خاصة بين اثنين فقط
+      // (ولي الأمر يصل إلى كل شيء بالقاعدة العامة أعلاه)
+      function inRoom(room) {
+        return room == 'family' || room == 'news'
+          || (room.matches('dm_[A-Za-z0-9]+_[A-Za-z0-9]+') && request.auth.uid in room.split('_'));
+      }
+      function validMsg() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['from', 'at', 'text', 'img', 'sticker', 'title', 'reacts'])
+          && d.from == request.auth.uid
+          && d.at is number
+          && (!('text' in d) || (d.text is string && d.text.size() <= 3000))
+          && (!('title' in d) || (d.title is string && d.title.size() <= 120))
+          && (!('sticker' in d) || (d.sticker is string && d.sticker.size() <= 40))
+          && (!('img' in d) || (d.img is string && d.img.size() <= 950000))
+          && (!('reacts' in d) || (d.reacts is map && d.reacts.size() == 0));
+      }
+      match /chatRooms/{room}/messages/{msg} {
+        allow read: if isMember(fid) && inRoom(room);
+        allow create: if isMember(fid) && inRoom(room) && validMsg();
+        // التفاعل بإيموجي: كل فرد يغيّر تفاعله هو فقط
+        allow update: if isMember(fid) && inRoom(room)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reacts'])
+          && request.resource.data.reacts is map && request.resource.data.reacts.size() <= 30
+          && request.resource.data.reacts.diff(resource.data.get('reacts', {})).affectedKeys().hasOnly([request.auth.uid]);
+        allow delete: if isMember(fid) && inRoom(room) && resource.data.from == request.auth.uid;
+      }
+
+      match /members/{mid} {
+        allow read, delete: if request.auth != null && request.auth.uid == mid;
+        // إنشاء السجل، أو إضافة تطبيق آخر إليه، يحتاج رمزاً صالحاً
+        allow create, update: if request.auth != null && request.auth.uid == mid && validMember(fid);
+        // الجهاز يفصل تطبيقاً واحداً عن نفسه: يحذف من apps فقط
+        allow update: if request.auth != null && request.auth.uid == mid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['apps'])
+          && request.resource.data.apps is map
+          && resource.data.apps.keys().hasAll(request.resource.data.apps.keys());
+      }
+    }
+
+    // رموز الانضمام: يُنشئها ولي الأمر لعشر دقائق، ويقرؤها من يعرف الرمز فقط (لا قائمة)
+    match /pairCodes/{code} {
+      allow get: if request.auth != null;
+      allow create: if code.size() == 8
+        && request.resource.data.keys().hasOnly(['fid', 'kid', 'exp'])
+        && isParent(request.resource.data.fid)
+        && request.resource.data.kid is string && request.resource.data.kid.size() <= 40
+        && request.resource.data.exp is timestamp
+        && request.resource.data.exp < request.time + duration.value(15, 'm');
+      allow delete: if isParent(resource.data.fid);
+    }
+  }
+}

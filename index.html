@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-look="falfoula">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#cfeeff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>شات العائلة</title>
+  <meta name="description" content="شات آمن لأفراد العائلة مع فلفولة وأرنوبة: رسائل للعائلة كلها ورسائل خاصة وصور وملصقات وأخبار">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="شات العائلة">
+  <meta property="og:title" content="شات العائلة">
+  <meta property="og:description" content="شات آمن لأفراد العائلة مع فلفولة وأرنوبة: رسائل وصور وملصقات وأخبار">
+  <meta property="og:url" content="https://znammous.github.io/family-chat/">
+  <meta property="og:image" content="https://znammous.github.io/family-chat/icons/icon-512.png">
+  <meta property="og:locale" content="ar_AR">
+  <meta name="twitter:card" content="summary">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="bg" class="bg" aria-hidden="true">
+    <span class="sun-disc"></span>
+    <span class="cloud" style="top:8%;--w:150px;animation-delay:-4s;animation-duration:46s"></span>
+    <span class="cloud" style="top:24%;--w:100px;animation-delay:-24s;animation-duration:62s"></span>
+    <span class="cloud" style="top:42%;--w:170px;animation-delay:-12s;animation-duration:54s"></span>
+    <span class="floaty" style="top:60%;right:6%">🦋</span>
+    <span class="floaty" style="top:34%;left:8%;animation-delay:-3s">🌸</span>
+    <span class="hill far"></span><span class="hill near"></span>
+  </div>
+  <main id="app"></main>
+  <div id="modal" class="modal" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="js/art.js"></script>
+  <script src="js/vendor/qrcode.js"></script>
+  <script src="js/cloud.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
