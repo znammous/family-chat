@@ -4,10 +4,12 @@ rules_version = '2';
 // هذا الملف متطابق في المشاريع الأربعة: أي تعديل فيه يُنسخ إليها كلها قبل النشر.
 service cloud.firestore {
   match /databases/{database}/documents {
-    // كل عائلة معرّفها هو معرّف حساب ولي الأمر (uid)، ويمكن إضافة أولياء أمور آخرين في parents
+    // كل عائلة معرّفها هو معرّف حساب ولي الأمر (uid)، ويمكن إضافة أولياء أمور آخرين في parents،
+    // أو بجهاز انضم برمز «ولي أمر» فسُجّل في families/{fid}/guardians/{معرّفه}
     function isParent(fid) {
       return request.auth != null && (
         request.auth.uid == fid ||
+        exists(/databases/$(database)/documents/families/$(fid)/guardians/$(request.auth.uid)) ||
         (exists(/databases/$(database)/documents/families/$(fid)) &&
          request.auth.uid in get(/databases/$(database)/documents/families/$(fid)).data.get('parents', []))
       );
@@ -112,6 +114,21 @@ service cloud.firestore {
           && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 3000
           && request.resource.data.edited is number;
         allow delete: if isMember(fid) && inRoom(room) && resource.data.from == request.auth.uid;
+      }
+
+      // ولي أمر آخر: جهازه يسجّل نفسه برمز أنشأه ولي الأمر لولي أمر (kid يبدأ بـ A|)، فيصبح له ما لولي الأمر.
+      // يقرأ سجلّه ويحذفه، وولي الأمر يرى الجميع ويحذفهم (بالقاعدة العامة)
+      match /guardians/{gid} {
+        allow get, delete: if request.auth != null && request.auth.uid == gid;
+        allow create: if request.auth != null && request.auth.uid == gid
+          && request.resource.data.keys().hasOnly(['code', 'name', 'at'])
+          && request.resource.data.name is string && request.resource.data.name.size() <= 40
+          && request.resource.data.at is number
+          && request.resource.data.code is string && request.resource.data.code.size() == 8
+          && exists(/databases/$(database)/documents/pairCodes/$(request.resource.data.code))
+          && pairCode(request.resource.data.code).fid == fid
+          && pairCode(request.resource.data.code).exp > request.time
+          && pairCode(request.resource.data.code).kid.matches('A[|].*');
       }
 
       match /members/{mid} {
