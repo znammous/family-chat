@@ -1,4 +1,4 @@
-// شات العائلة: الشاشات والمحادثات. البيانات كلها في cloud.js والرسومات في art.js
+// مجلس العائلة: الشاشات والمحادثات. البيانات كلها في cloud.js والرسومات في art.js
 (() => {
   const $ = id => document.getElementById(id);
   const app = $('app');
@@ -133,7 +133,7 @@
   }
   function badge() {
     const n = allRooms().filter(r => canWrite(r)).reduce((s, r) => s + unreadOf(r), 0);
-    document.title = n ? `(${n}) شات العائلة` : 'شات العائلة';
+    document.title = n ? `(${n}) مجلس العائلة` : 'مجلس العائلة';
     if (navigator.setAppBadge) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
     return n;
   }
@@ -182,9 +182,9 @@
   function showWelcome(offline) {
     app.innerHTML = `<div class="center-screen welcome">
       <div class="duo">${Art.char('falfoula', 'cheer', 'bob')}${Art.char('arnooba', 'cheer', 'bob late')}</div>
-      <h1 class="logo">شات العائلة</h1>
+      <h1 class="logo">مجلس العائلة</h1>
       <p class="talk"><b>فلفولة وأرنوبة:</b> أهلاً بك! هنا تتكلم العائلة كلها، وتتبادل الصور والملصقات والأخبار 💌</p>
-      ${offline ? '<p class="warn">📡 الشات يحتاج اتصالاً بالإنترنت. افتحه من رابط https.</p>' : `
+      ${offline ? '<p class="warn">📡 المجلس يحتاج اتصالاً بالإنترنت. افتحه من رابط https.</p>' : `
       <button class="btn big green" data-act="signIn">👑 أنا ولي الأمر — دخول بحساب Google</button>
       <button class="btn big pink" data-act="goJoin">📱 انضم برمز QR من ولي الأمر</button>
       <p class="muted small">ولي الأمر يدخل بحسابه مرة واحدة، ثم يضيف الأبناء من «العائلة ← أضف فرداً».</p>`}
@@ -252,7 +252,7 @@
     app.innerHTML = `<div class="page home">
       <header class="top">
         <button class="me" data-act="tab" data-arg="family">${Art.avatar(me.avatar, 'sm')}<span><small>أهلاً</small><b>${esc(me.name)}</b></span></button>
-        <h1 class="logo small">شات العائلة</h1>
+        <h1 class="logo small">مجلس العائلة</h1>
         ${Cloud.status() === 'offline' ? '<span class="pill warn">📴 بلا اتصال</span>' : '<span class="pill ok">🟢</span>'}
       </header>
       <div class="tab-body">${body}</div>
@@ -269,6 +269,7 @@
     if (!m) return '<i>لا رسائل بعد، ابدأ أنت! 👋</i>';
     const who = m.from === uid() ? 'أنت: ' : '';
     if (m.sticker) return `${who}✨ ملصق`;
+    if (m.audio) return `${who}🎤 رسالة صوتية`;
     if (m.img) return `${who}📷 صورة${m.text ? ' · ' + esc(m.text.slice(0, 40)) : ''}`;
     return who + esc((m.text || '').slice(0, 60));
   }
@@ -356,7 +357,7 @@
       <input id="newsTitle" class="text-in" maxlength="120" placeholder="عنوان الخبر (مثال: نجحت بامتياز! 🎉)" value="${esc(d.title || '')}">
       <textarea id="newsText" class="text-in" rows="4" maxlength="3000" placeholder="اكتب التفاصيل…">${esc(d.text || '')}</textarea>
       ${d.img ? `<img class="news-img" src="${d.img}" alt=""><button class="link-btn danger" data-act="newsNoImg">إزالة الصورة</button>`
-        : '<label class="btn blue wide">📷 أضف صورة<input type="file" accept="image/*" hidden data-pick="news"></label>'}
+        : `<div class="row"><button class="btn blue" data-act="camera" data-arg="news">📸 صوّر</button><label class="btn blue">🖼️ من الألبوم<input type="file" accept="image/*" hidden data-pick="news"></label></div>`}
       <div class="row"><button class="btn green" data-act="newsPost">انشر الخبر 🚀</button><button class="btn plain" data-act="closeModal">إلغاء</button></div>
     </div>`);
   }
@@ -387,7 +388,7 @@
       <div class="setting"><span>🔊 الأصوات</span><button class="switch ${ls.get('family-chat-muted', false) ? '' : 'on'}" data-act="toggleMute"><i></i></button></div>
       ${isParent() ? `<p class="muted small" dir="ltr">${esc(Cloud.email())}</p>` : ''}
       <a class="btn plain wide" href="${HEROES}">🌟 عالم الأبطال: ألعاب العائلة</a>
-      <button class="link-btn danger" data-act="signOut">${isParent() ? 'تسجيل الخروج من هذا الجهاز' : 'فصل هذا الجهاز عن شات العائلة'}</button></div>`;
+      <button class="link-btn danger" data-act="signOut">${isParent() ? 'تسجيل الخروج من هذا الجهاز' : 'فصل هذا الجهاز عن مجلس العائلة'}</button></div>`;
     return h;
   }
 
@@ -398,7 +399,7 @@
       qr.make();
       return `<div class="card pair-box ${pairing.ready ? '' : 'pending'}">
         <h3>📱 أضف ${esc(pairing.name || 'فرداً')}</h3>
-        <p>على جهاز ${esc(pairing.name || 'الفرد الجديد')}: افتح شات العائلة ← «انضم برمز QR» ثم امسح الرمز، أو امسحه بكاميرا الجهاز مباشرة.</p>
+        <p>على جهاز ${esc(pairing.name || 'الفرد الجديد')}: افتح مجلس العائلة ← «انضم برمز QR» ثم امسح الرمز، أو امسحه بكاميرا الجهاز مباشرة.</p>
         <div class="qr">${qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true })}</div>
         <b class="pair-code" dir="ltr">${pairing.code.slice(0, 4)}-${pairing.code.slice(4)}</b>
         <small class="muted">${pairing.ready ? '✅ جاهز · صالح لعشر دقائق' : '<span class="spinner"></span> جارٍ تفعيل الرمز…'}</small>
@@ -406,7 +407,7 @@
       </div>`;
     }
     return `<div class="card"><h3>➕ أضف فرداً للعائلة</h3>
-      <p class="muted small">يظهر رمز QR يمسحه جهاز الابن أو البنت فينضم إلى حسابك مباشرة. الأجهزة المرتبطة من قبل بأبطال الغابة أو أبطال الإملاء تدخل الشات تلقائياً.</p>
+      <p class="muted small">يظهر رمز QR يمسحه جهاز الابن أو البنت فينضم إلى حسابك مباشرة. الأجهزة المرتبطة من قبل بأبطال الغابة أو أبطال الإملاء تدخل المجلس تلقائياً.</p>
       <input id="pairName" class="text-in" maxlength="30" placeholder="اسمه (مثال: سارة)">
       <div class="chips" id="pairRole">
         <button class="chip on" data-act="pairRole" data-arg="K">🧒 ابن أو بنت</button>
@@ -451,9 +452,16 @@
       <footer class="composer">
         <button class="ic" data-act="panel" data-arg="sticker" aria-label="ملصقات">${Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'cheer', 'mini')}</button>
         <button class="ic" data-act="panel" data-arg="emoji" aria-label="إيموجي">😊</button>
-        <label class="ic" aria-label="صورة">📷<input type="file" accept="image/*" hidden data-pick="chat"></label>
+        <button class="ic" data-act="photoMenu" data-arg="chat" aria-label="صورة">📷</button>
         <textarea id="txt" rows="1" maxlength="3000" placeholder="اكتب رسالة…"></textarea>
+        <button class="ic mic" data-act="recStart" aria-label="تسجيل صوت">🎤</button>
         <button class="send" data-act="sendText" aria-label="إرسال">➤</button>
+      </footer>
+      <footer class="composer recbar" id="recBar" hidden>
+        <button class="ic" data-act="recCancel" aria-label="إلغاء">🗑️</button>
+        <span class="rec-dot"></span><b class="rec-time" id="recTime">0:00</b>
+        <span class="rec-hint">جارٍ التسجيل… تكلّم الآن 🎙️</span>
+        <button class="send" data-act="recSend" aria-label="إرسال التسجيل">➤</button>
       </footer>` : ''}
     </div>`;
     refreshRoom(true);
@@ -487,12 +495,13 @@
       const u = userOf(m.from);
       const head = !mine && group && m.from !== lastFrom;
       lastFrom = m.from;
-      const kind = m.sticker ? 'is-sticker' : m.img ? 'is-img' : (m.text && onlyEmoji(m.text) ? 'is-jumbo' : '');
+      const kind = m.sticker ? 'is-sticker' : m.audio ? 'is-audio' : m.img ? 'is-img' : (m.text && onlyEmoji(m.text) ? 'is-jumbo' : '');
       h += `<div class="msg ${mine ? 'mine' : 'theirs'} ${kind} ${head ? 'head' : ''}" data-id="${m.id}">
         ${!mine && group ? `<span class="m-av">${head ? Art.avatar(u ? u.avatar : '🙂', 'sm') : ''}</span>` : ''}
         <div class="bubble" data-act="msgMenu" data-arg="${m.id}">
           ${head ? `<b class="who" style="color:${colorOf(m.from)}">${esc(nameOf(m.from))}</b>` : ''}
           ${m.sticker ? Art.sticker(m.sticker) : ''}
+          ${m.audio ? voiceBubble(m) : ''}
           ${m.img ? `<img src="${m.img}" alt="صورة" data-act="view" data-arg="${room}|${m.id}">` : ''}
           ${m.text ? `<div class="text">${rich(m.text)}</div>` : ''}
           <span class="meta">${timeOf(m.at)}${mine ? (m.pending ? ' 🕓' : ' ✓') : ''}</span>
@@ -501,6 +510,7 @@
       </div>`;
     });
     box.innerHTML = h;
+    paintVoice();
     if (near) box.scrollTop = box.scrollHeight;
     markRead(room);
     badge();
@@ -536,7 +546,7 @@
     m.innerHTML = `<div class="modal-bg" data-act="closeModal"></div>${html}`;
     m.hidden = false;
   }
-  function closeModal() { const m = $('modal'); m.hidden = true; m.innerHTML = ''; }
+  function closeModal() { stopCam(); const m = $('modal'); m.hidden = true; m.innerHTML = ''; }
 
   function findMsg(r, id) { return Cloud.msgsOf(r).find(m => m.id === id); }
 
@@ -555,66 +565,276 @@
     </div>`);
   }
 
+  // ───── الرسائل الصوتية: تسجيل حتى دقيقة ويُحفظ داخل الرسالة ─────
+  const REC_MAX = 60;
+  let rec = null;      // { mr, stream, chunks, start, timer, cancel }
+  let player = null;   // { id, audio }
+  const fmt = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+  // mp4 أولاً لأنه يعمل على آيفون وأندرويد معاً
+  const recType = () => ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+    .find(t => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+
+  function voiceBubble(m) {
+    const on = player && player.id === m.id;
+    return `<button class="voice ${on && !player.audio.paused ? 'playing' : ''}" data-act="playVoice" data-arg="${room}|${m.id}" data-aud="${m.id}">
+      <span class="v-btn">${on && !player.audio.paused ? '⏸️' : '▶️'}</span>
+      <span class="v-wave">${'<i></i>'.repeat(18)}</span>
+      <span class="v-dur">${fmt(m.dur || 0)}</span>
+    </button>`;
+  }
+  function paintVoice() {
+    document.querySelectorAll('[data-aud]').forEach(el => {
+      const on = player && player.id === el.dataset.aud;
+      const playing = on && !player.audio.paused;
+      el.classList.toggle('playing', playing);
+      el.querySelector('.v-btn').textContent = playing ? '⏸️' : '▶️';
+      const a = on ? player.audio : null;
+      const p = a && a.duration && isFinite(a.duration) ? a.currentTime / a.duration : 0;
+      el.style.setProperty('--p', on ? p : 0);
+    });
+  }
+  function playVoice(arg) {
+    const [r, id] = arg.split('|');
+    if (player && player.id === id) {
+      if (player.audio.paused) player.audio.play().catch(() => {}); else player.audio.pause();
+      paintVoice();
+      return;
+    }
+    if (player) player.audio.pause();
+    const m = findMsg(r, id);
+    if (!m || !m.audio) return;
+    const audio = new Audio(m.audio);
+    player = { id, audio };
+    ['play', 'pause', 'timeupdate'].forEach(ev => audio.addEventListener(ev, paintVoice));
+    audio.addEventListener('ended', () => { audio.currentTime = 0; paintVoice(); });
+    audio.play().catch(() => toast('⚠️ تعذّر تشغيل التسجيل على هذا الجهاز'));
+    paintVoice();
+  }
+
+  async function recStart() {
+    if (rec) return;
+    if (!window.MediaRecorder || !navigator.mediaDevices) { toast('🎤 هذا المتصفح لا يدعم التسجيل'); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+    catch (e) { toast(e.name === 'NotAllowedError' ? '🎤 اسمح للتطبيق باستخدام الميكروفون من إعدادات المتصفح' : '🎤 تعذّر فتح الميكروفون', 4000); return; }
+    const type = recType();
+    const mr = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), audioBitsPerSecond: 32000 });
+    rec = { mr, stream, chunks: [], start: Date.now(), cancel: false, room };
+    mr.ondataavailable = e => { if (e.data && e.data.size) rec.chunks.push(e.data); };
+    mr.onstop = finishRec;
+    mr.start(250);
+    if (player) player.audio.pause();
+    Sound.tap();
+    if (navigator.vibrate) navigator.vibrate(40);
+    $('recBar').hidden = false;
+    document.querySelector('.composer:not(.recbar)').hidden = true;
+    rec.timer = setInterval(() => {
+      const sec = (Date.now() - rec.start) / 1000;
+      const t = $('recTime');
+      if (t) t.textContent = fmt(sec);
+      if (sec >= REC_MAX) { toast('⏱️ أقصى مدة دقيقة واحدة'); recStop(false); }
+    }, 200);
+  }
+  function recStop(cancel) {
+    if (!rec) return;
+    rec.cancel = cancel;
+    clearInterval(rec.timer);
+    if (rec.mr.state !== 'inactive') rec.mr.stop(); else finishRec();
+    const bar = $('recBar'), main = document.querySelector('.composer:not(.recbar)');
+    if (bar) bar.hidden = true;
+    if (main) main.hidden = false;
+  }
+  function finishRec() {
+    const r = rec;
+    rec = null;
+    if (!r) return;
+    r.stream.getTracks().forEach(t => t.stop());
+    const dur = Math.round((Date.now() - r.start) / 100) / 10;
+    if (r.cancel) return;
+    if (dur < 0.8) { toast('🎤 التسجيل قصير جداً'); return; }
+    const blob = new Blob(r.chunks, { type: r.mr.mimeType || 'audio/webm' });
+    const fr = new FileReader();
+    fr.onload = () => {
+      if (fr.result.length > 900000) { toast('⚠️ التسجيل طويل جداً'); return; }
+      Cloud.send(r.room, { audio: fr.result, dur: Math.min(REC_MAX, Math.round(dur)) || 1 }).done
+        .catch(() => toast('⚠️ تعذّر إرسال التسجيل'));
+      Sound.send();
+    };
+    fr.readAsDataURL(blob);
+  }
+
   // ───── الصور: تُصغَّر على الجهاز قبل الإرسال حتى تتسع في رسالة واحدة ─────
+  function shrink(src, w, h) {
+    let max = 1280, q = 0.78, out = '';
+    for (let i = 0; i < 8; i++) {
+      const s = Math.min(1, max / Math.max(w, h));
+      const c = document.createElement('canvas');
+      c.width = Math.round(w * s);
+      c.height = Math.round(h * s);
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(src, 0, 0, c.width, c.height);
+      out = c.toDataURL('image/jpeg', q);
+      if (out.length < 650000) break;
+      max *= 0.8; q = Math.max(0.5, q - 0.07);
+    }
+    return out;
+  }
   function compress(file) {
     return new Promise((ok, fail) => {
       const url = URL.createObjectURL(file);
       const img = new Image();
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        let max = 1280, q = 0.78, out = '';
-        for (let i = 0; i < 8; i++) {
-          const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-          const c = document.createElement('canvas');
-          c.width = Math.round(img.naturalWidth * s);
-          c.height = Math.round(img.naturalHeight * s);
-          const ctx = c.getContext('2d');
-          ctx.fillStyle = '#fff';
-          ctx.fillRect(0, 0, c.width, c.height);
-          ctx.drawImage(img, 0, 0, c.width, c.height);
-          out = c.toDataURL('image/jpeg', q);
-          if (out.length < 650000) break;
-          max *= 0.8; q = Math.max(0.5, q - 0.07);
-        }
-        ok(out);
-      };
+      img.onload = () => { URL.revokeObjectURL(url); ok(shrink(img, img.naturalWidth, img.naturalHeight)); };
       img.onerror = () => { URL.revokeObjectURL(url); fail(new Error('img')); };
       img.src = url;
     });
   }
 
-  app.addEventListener('change', async e => {
+  // الصورة جاهزة: في المحادثة تظهر نافذة الإرسال، وفي الخبر تُضاف إليه
+  function gotImage(kind, data, fromCam) {
+    if (kind === 'chat') {
+      pendingImg = { room, data };
+      modal(`<div class="sheet"><h3>📷 إرسال صورة</h3><img class="news-img" src="${data}" alt="">
+        <input id="imgCap" class="text-in" maxlength="500" placeholder="اكتب تعليقاً (اختياري)">
+        <div class="row"><button class="btn green" data-act="sendImg">أرسل 🚀</button>
+        ${fromCam ? '<button class="btn blue" data-act="camera" data-arg="chat">📸 أعد التصوير</button>' : ''}
+        <button class="btn plain" data-act="closeModal">إلغاء</button></div></div>`);
+    } else {
+      newsDraft = newsDraft || {};
+      newsDraft.img = data;
+      showNewsModal();
+    }
+  }
+
+  // كل مدخلات اختيار الصور، في الصفحة أو داخل النوافذ
+  document.addEventListener('change', async e => {
     const inp = e.target.closest('input[type=file][data-pick]');
     if (!inp || !inp.files[0]) return;
     const kind = inp.dataset.pick;
+    if (kind === 'news') keepNewsDraft();
     toast('⏳ نجهّز الصورة…', 1500);
-    try {
-      const data = await compress(inp.files[0]);
-      if (kind === 'chat') {
-        pendingImg = { room, data };
-        modal(`<div class="sheet"><h3>📷 إرسال صورة</h3><img class="news-img" src="${data}" alt="">
-          <input id="imgCap" class="text-in" maxlength="500" placeholder="اكتب تعليقاً (اختياري)">
-          <div class="row"><button class="btn green" data-act="sendImg">أرسل 🚀</button><button class="btn plain" data-act="closeModal">إلغاء</button></div></div>`);
-      } else {
-        keepNewsDraft();
-        newsDraft.img = data;
-        showNewsModal();
-      }
-    } catch (err) { toast('⚠️ تعذّر فتح الصورة'); }
+    try { gotImage(kind, await compress(inp.files[0])); } catch (err) { toast('⚠️ تعذّر فتح الصورة'); }
     inp.value = '';
   });
-  // مدخل صورة الأخبار داخل النافذة (خارج #app)
-  document.getElementById('modal').addEventListener('change', async e => {
-    const inp = e.target.closest('input[type=file][data-pick="news"]');
-    if (!inp || !inp.files[0]) return;
-    toast('⏳ نجهّز الصورة…', 1500);
+
+  // اختيار مصدر الصورة: الكاميرا أو الألبوم
+  function photoMenu(kind) {
+    modal(`<div class="sheet small">
+      <h3>📷 أرسل صورة</h3>
+      <div class="pick-src">
+        <button data-act="camera" data-arg="${kind}"><b>📸</b><span>صوّر الآن</span></button>
+        <label><b>🖼️</b><span>من الألبوم</span><input type="file" accept="image/*" hidden data-pick="${kind}"></label>
+      </div>
+      <button class="btn plain wide" data-act="closeModal">إلغاء</button>
+    </div>`);
+  }
+
+  // ───── الكاميرا داخل التطبيق ─────
+  // إطارات لطيفة: فلفولة أو أرنوبة تظهر في زاوية الصورة
+  const FRAMES = [
+    { id: '', name: 'بدون' },
+    { id: 'f', name: 'فلفولة', who: 'falfoula', mood: 'cheer' },
+    { id: 'a', name: 'أرنوبة', who: 'arnooba', mood: 'love' },
+  ];
+  let cam = null;   // { stream, facing, kind, frame }
+  const camSupported = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  function stopCam() {
+    if (cam && cam.stream) cam.stream.getTracks().forEach(t => t.stop());
+    if (cam) cam.stream = null;
+  }
+  function frameImage(f) {
+    return new Promise(res => {
+      if (!f || !f.who) return res(null);
+      const svg = (f.who === 'arnooba' ? Art.arnoobaSvg : Art.falfoulaSvg)(f.mood).replace('<svg ', '<svg width="480" height="600" ');
+      const img = new Image();
+      img.onload = () => res(img);
+      img.onerror = () => res(null);
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  }
+
+  async function openCamera(kind) {
+    if (kind === 'news') keepNewsDraft();
+    // بلا كاميرا مدعومة: نفتح كاميرا الجهاز عبر مدخل الملفات
+    if (!camSupported()) { fallbackCamera(kind); return; }
+    const facing = cam ? cam.facing : 'environment';
+    const frame = cam ? cam.frame : (look === 'arnooba' ? 'a' : '');
+    stopCam();
+    cam = { stream: null, facing, kind, frame };
+    modal(`<div class="camera">
+      <video id="camVideo" playsinline muted autoplay class="${facing === 'user' ? 'mirror' : ''}"></video>
+      <div class="cam-frame" id="camFrame"></div>
+      <div class="cam-top">
+        <button class="cam-btn" data-act="camClose" aria-label="إغلاق">✖</button>
+        <div class="cam-frames">${FRAMES.map(f => `<button class="chip ${f.id === frame ? 'on' : ''}" data-act="camFrame" data-arg="${f.id}">${f.name}</button>`).join('')}</div>
+      </div>
+      <p class="cam-wait" id="camWait"><span class="spinner"></span> نفتح الكاميرا…</p>
+      <div class="cam-bar">
+        <label class="cam-btn" aria-label="من الألبوم">🖼️<input type="file" accept="image/*" hidden data-pick="${kind}"></label>
+        <button class="shutter" data-act="camShot" aria-label="التقط الصورة"></button>
+        <button class="cam-btn" data-act="camFlip" aria-label="قلب الكاميرا">🔄</button>
+      </div>
+    </div>`);
+    paintFrame();
     try {
-      const data = await compress(inp.files[0]);
-      keepNewsDraft();
-      newsDraft.img = data;
-      showNewsModal();
-    } catch (err) { toast('⚠️ تعذّر فتح الصورة'); }
-  });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false,
+      });
+      // أُغلقت النافذة أثناء انتظار الإذن
+      if (!cam || !$('camVideo')) { stream.getTracks().forEach(t => t.stop()); return; }
+      cam.stream = stream;
+      const v = $('camVideo');
+      v.srcObject = stream;
+      v.play().catch(() => {});
+      v.addEventListener('playing', () => { const w = $('camWait'); if (w) w.remove(); }, { once: true });
+    } catch (e) {
+      const k = cam.kind;
+      closeModal();
+      toast(e.name === 'NotAllowedError' ? '📷 اسمح للتطبيق باستخدام الكاميرا من إعدادات المتصفح' : '📷 تعذّر فتح الكاميرا', 4000);
+      if (e.name !== 'NotAllowedError') fallbackCamera(k);
+    }
+  }
+  function fallbackCamera(kind) {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
+    inp.dataset.pick = kind; inp.hidden = true;
+    document.body.appendChild(inp);
+    inp.addEventListener('change', () => setTimeout(() => inp.remove(), 0));
+    inp.click();
+  }
+  function paintFrame() {
+    const box = $('camFrame');
+    if (!box || !cam) return;
+    const f = FRAMES.find(x => x.id === cam.frame);
+    box.innerHTML = f && f.who ? Art.char(f.who, f.mood) : '';
+    document.querySelectorAll('.cam-frames .chip').forEach(b => b.classList.toggle('on', b.dataset.arg === cam.frame));
+  }
+  async function takeShot() {
+    const v = $('camVideo');
+    if (!cam || !v || !v.videoWidth) { toast('⏳ لحظة، الكاميرا تستعد…'); return; }
+    const w = v.videoWidth, h = v.videoHeight;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    // الكاميرا الأمامية تُحفظ كما تُرى في المعاينة (كالمرآة)
+    if (cam.facing === 'user') { ctx.translate(w, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(v, 0, 0, w, h);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const fimg = await frameImage(FRAMES.find(x => x.id === cam.frame));
+    if (fimg) {
+      const fh = Math.min(w, h) * 0.42, fw = fh * 0.8;
+      ctx.drawImage(fimg, w * 0.03, h - fh - h * 0.02, fw, fh);
+    }
+    Sound.pop();
+    const flash = document.createElement('div');
+    flash.className = 'cam-flash';
+    $('modal').appendChild(flash);
+    const kind = cam.kind;
+    const data = shrink(c, w, h);
+    stopCam();
+    setTimeout(() => gotImage(kind, data, true), 180);
+  }
 
   // ───── الانضمام برمز ─────
   function deviceName() {
@@ -700,7 +920,7 @@
     Sound.pop();
     if (navigator.vibrate) navigator.vibrate(60);
     const m = incoming[incoming.length - 1];
-    const text = `${nameOf(m.from)}: ${m.sticker ? '✨ ملصق' : m.img ? '📷 صورة' : (m.title || m.text || '').slice(0, 80)}`;
+    const text = `${nameOf(m.from)}: ${m.sticker ? '✨ ملصق' : m.audio ? '🎤 رسالة صوتية' : m.img ? '📷 صورة' : (m.title || m.text || '').slice(0, 80)}`;
     if (document.visibilityState === 'visible') toast(`💌 ${roomTitle(r) === nameOf(m.from) ? '' : roomTitle(r) + ' · '}${text}`);
     else if (notifyOn() && navigator.serviceWorker) {
       navigator.serviceWorker.ready.then(reg => reg.showNotification(roomTitle(r), {
@@ -718,6 +938,8 @@
     render();
   }
   function closeRoom() {
+    recStop(true);
+    if (player) { player.audio.pause(); player = null; }
     room = null;
     panel = null;
     render();
@@ -809,6 +1031,21 @@
       Sound.send();
     },
     msgMenu(id) { msgMenu(id); },
+    photoMenu(kind) { photoMenu(kind); },
+    recStart() { recStart(); },
+    recSend() { recStop(false); },
+    recCancel() { recStop(true); Sound.tap(); },
+    playVoice(arg) { playVoice(arg); },
+    camera(kind) { openCamera(kind); },
+    camShot() { takeShot(); },
+    camFlip() { if (!cam) return; cam.facing = cam.facing === 'user' ? 'environment' : 'user'; openCamera(cam.kind); },
+    camFrame(id) { if (!cam) return; cam.frame = id; paintFrame(); },
+    camClose() {
+      const kind = cam && cam.kind;
+      closeModal();
+      cam = null;
+      if (kind === 'news' && newsDraft) showNewsModal();
+    },
     react(arg) {
       const [r, id, e] = arg.split('|');
       const m = findMsg(r, id);
@@ -868,7 +1105,7 @@
     },
     cancelPair() { pairing = null; render(); },
     removeMember(id) {
-      if (!confirm(`فصل ${nameOf(id)} عن العائلة؟ سيُفصل جهازه عن الشات وعن ألعاب العائلة أيضاً، وتبقى رسائله.`)) return;
+      if (!confirm(`فصل ${nameOf(id)} عن العائلة؟ سيُفصل جهازه عن المجلس وعن ألعاب العائلة أيضاً، وتبقى رسائله.`)) return;
       Cloud.removeMember(id).then(() => toast('تم الفصل')).catch(() => toast('⚠️ تعذّر الفصل'));
     },
 
@@ -883,7 +1120,7 @@
     },
     toggleMute() { ls.set('family-chat-muted', !ls.get('family-chat-muted', false)); render(); },
     signOut() {
-      const msg = isParent() ? 'تسجيل الخروج من هذا الجهاز؟' : 'فصل هذا الجهاز عن شات العائلة؟ ستحتاج رمزاً جديداً من ولي الأمر للعودة.';
+      const msg = isParent() ? 'تسجيل الخروج من هذا الجهاز؟' : 'فصل هذا الجهاز عن مجلس العائلة؟ ستحتاج رمزاً جديداً من ولي الأمر للعودة.';
       if (!confirm(msg)) return;
       room = null;
       Cloud.signOut();

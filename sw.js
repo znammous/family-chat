@@ -1,6 +1,6 @@
-// يحفظ ملفات الشات على الجهاز ليفتح بسرعة وبدون إنترنت (الرسائل نفسها يحفظها Firestore)
+// يحفظ ملفات المجلس على الجهاز ليفتح بسرعة وبدون إنترنت (الرسائل نفسها يحفظها Firestore)
 // غيّر رقم الإصدار عند تعديل أي ملف حتى يحدَّث الكاش
-const CACHE = 'family-chat-v2';
+const CACHE = 'family-chat-v3';
 const FILES = [
   './',
   'index.html',
@@ -52,7 +52,7 @@ self.addEventListener('fetch', e => {
   );
 });
 
-// الضغط على تنبيه رسالة يفتح الشات على تلك المحادثة
+// الضغط على تنبيه رسالة يفتح المجلس على تلك المحادثة
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const room = e.notification.data && e.notification.data.room;

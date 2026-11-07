@@ -112,7 +112,7 @@ const Cloud = (() => {
 
   const otherApps = d => !!(d && d.apps && Object.keys(d.apps).some(a => a !== APP));
 
-  // الجهاز يخرج من الشات: يبقى مرتبطاً بالألعاب إن كان مرتبطاً بها
+  // الجهاز يخرج من المجلس: يبقى مرتبطاً بالألعاب إن كان مرتبطاً بها
   async function signOut() {
     if (user && user.isAnonymous && fid) {
       const ref = famDoc('members', user.uid);
@@ -194,7 +194,7 @@ const Cloud = (() => {
     fb.fs.updateDoc(famDoc('chatUsers', user.uid), { seen: Date.now() }).catch(() => {});
   }
 
-  // ولي الأمر يفصل جهازاً عن العائلة كلها (الشات والألعاب)
+  // ولي الأمر يفصل جهازاً عن العائلة كلها (المجلس والألعاب)
   async function removeMember(id) {
     await fb.fs.deleteDoc(famDoc('members', id)).catch(() => {});
     await fb.fs.deleteDoc(famDoc('chatUsers', id));
@@ -221,7 +221,7 @@ const Cloud = (() => {
 
   function send(room, msg) {
     const data = { from: user.uid, at: Date.now() };
-    ['text', 'img', 'sticker', 'title'].forEach(k => { if (msg[k]) data[k] = msg[k]; });
+    ['text', 'img', 'sticker', 'title', 'audio', 'dur'].forEach(k => { if (msg[k]) data[k] = msg[k]; });
     // نعيد المعرّف فوراً؛ Firestore يرفع الرسالة عند عودة الاتصال إن كان الجهاز بلا إنترنت
     const ref = fb.fs.doc(famCol('chatRooms', room, 'messages'));
     const done = fb.fs.setDoc(ref, data);

@@ -301,3 +301,42 @@ html[data-look="arnooba"] .modal-bg { background: rgba(120, 60, 110, .45); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ───── الكاميرا ───── */
+.pick-src { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+.pick-src > * { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 8px; border-radius: 22px; background: #fff; box-shadow: 0 5px 0 var(--line); font-weight: 800; color: var(--deep); cursor: pointer; }
+.pick-src b { font-size: 42px; line-height: 1.1; }
+.pick-src > *:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--line); }
+.camera { position: fixed; inset: 0; z-index: 2; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.camera video { width: 100%; height: 100%; object-fit: cover; }
+.camera video.mirror { transform: scaleX(-1); }
+.cam-frame { position: absolute; left: 3%; bottom: calc(118px + env(safe-area-inset-bottom)); pointer-events: none; }
+.cam-frame .char { width: 30vmin; height: 37.5vmin; max-width: 170px; max-height: 212px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .3)); }
+.cam-top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 10px; padding: 12px; padding-top: calc(12px + env(safe-area-inset-top)); background: linear-gradient(rgba(0, 0, 0, .45), transparent); }
+.cam-frames { display: flex; gap: 6px; flex-wrap: wrap; }
+.cam-bar { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-around; padding: 18px 12px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0, 0, 0, .55)); }
+.cam-btn { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .9); font-size: 26px; cursor: pointer; flex-shrink: 0; }
+.shutter { width: 78px; height: 78px; border-radius: 50%; background: #fff; border: 6px solid var(--accent); box-shadow: 0 0 0 4px #fff; transition: transform .1s; }
+.shutter:active { transform: scale(.9); }
+.cam-wait { position: absolute; color: #fff; font-weight: 700; }
+.cam-flash { position: fixed; inset: 0; z-index: 5; background: #fff; animation: flash .35s ease-out forwards; pointer-events: none; }
+@keyframes flash { to { opacity: 0; } }
+
+/* ───── الرسائل الصوتية ───── */
+.voice { --p: 0; display: flex; align-items: center; gap: 8px; min-width: 210px; padding: 4px 2px; direction: ltr; }
+.v-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--primary); font-size: 18px; flex-shrink: 0; box-shadow: 0 3px 0 var(--primary-dark); }
+.v-wave { flex: 1; display: flex; align-items: center; gap: 3px; height: 30px; position: relative; }
+.v-wave i { flex: 1; border-radius: 3px; background: var(--muted); opacity: .35; height: 30%; }
+.v-wave i:nth-child(3n) { height: 70%; } .v-wave i:nth-child(4n+1) { height: 50%; } .v-wave i:nth-child(5n+2) { height: 90%; }
+.v-wave::after { content: ""; position: absolute; inset: 0; width: calc(var(--p) * 100%); background: linear-gradient(90deg, transparent 0, transparent 100%); border-right: 3px solid var(--accent); pointer-events: none; }
+.voice.playing .v-wave i { opacity: .7; animation: wave .8s ease-in-out infinite alternate; }
+.voice.playing .v-wave i:nth-child(2n) { animation-delay: .2s; }
+@keyframes wave { to { transform: scaleY(.5); } }
+.v-dur { font-size: 13px; font-weight: 800; color: var(--muted); }
+.composer .mic { background: var(--primary-light); }
+.recbar { align-items: center; }
+.recbar[hidden], .composer[hidden] { display: none; }
+.rec-dot { width: 14px; height: 14px; border-radius: 50%; background: #ff3b5c; animation: blink 1s infinite; flex-shrink: 0; }
+.rec-time { font-size: 20px; color: var(--deep); min-width: 48px; }
+.rec-hint { flex: 1; color: var(--muted); font-weight: 700; font-size: 14px; }
+@keyframes blink { 50% { opacity: .2; } }
