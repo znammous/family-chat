@@ -103,5 +103,8 @@ exports.chatPush = onCall(
           })));
       if (dead.length) await d.ref.update(Object.fromEntries(dead.map(k => ['subs.' + k, FieldValue.delete()])));
     }));
+    // للتشخيص: من يُفترض أن يصله التنبيه، وكم جهازاً له عنوان محفوظ، وكم تنبيهاً أُرسل (بلا محتوى الرسالة)
+    const subsOf = id => { const d = docs.find(x => x.id === id); return d && d.exists ? Object.keys(d.data().subs || {}).length : 0; };
+    console.log('chatPush', JSON.stringify({ room: room.slice(0, 3), to: to.map(u => `${u.name}:${subsOf(u.id)}`), sent }));
     return { sent };
   });
