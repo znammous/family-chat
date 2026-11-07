@@ -1,6 +1,6 @@
 // يحفظ ملفات المجلس على الجهاز ليفتح بسرعة وبدون إنترنت (الرسائل نفسها يحفظها Firestore)
 // غيّر رقم الإصدار عند تعديل أي ملف حتى يحدَّث الكاش
-const CACHE = 'family-chat-v25';
+const CACHE = 'family-chat-v26';
 const FILES = [
   './',
   'index.html',
@@ -59,8 +59,10 @@ self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) {}
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-    // المجلس مفتوح أمام صاحبه: هو يعرض الرسالة بنفسه. (الآيفون يلغي التنبيهات إن وصل تنبيه لم يُعرض، فنعرضه دائماً هناك)
-    if (!IOS && list.some(c => c.visibilityState === 'visible')) return;
+    // المجلس أمام صاحبه الآن (مركَّز عليه): هو يعرض الرسالة بنفسه.
+    // (الآيفون يلغي التنبيهات إن وصل تنبيه لم يُعرض، فنعرضه دائماً هناك)
+    const skip = !IOS && list.some(c => c.focused && c.visibilityState === 'visible');
+    if (skip) return;
     return self.registration.showNotification(d.title || 'مجلس العائلة', {
       body: d.body || '💌 رسالة جديدة', icon: 'icons/icon-192.png', badge: 'icons/badge.png',
       tag: d.room || 'chat', renotify: true, lang: 'ar', dir: 'rtl', data: { room: d.room },
