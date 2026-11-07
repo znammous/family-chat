@@ -86,6 +86,12 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reacts'])
           && request.resource.data.reacts is map && request.resource.data.reacts.size() <= 30
           && request.resource.data.reacts.diff(resource.data.get('reacts', {})).affectedKeys().hasOnly([request.auth.uid]);
+        // صاحب الرسالة النصية يعدّل نصها فقط
+        allow update: if isMember(fid) && inRoom(room) && resource.data.from == request.auth.uid
+          && 'text' in resource.data && !('img' in resource.data) && !('audio' in resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'edited'])
+          && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 3000
+          && request.resource.data.edited is number;
         allow delete: if isMember(fid) && inRoom(room) && resource.data.from == request.auth.uid;
       }
 

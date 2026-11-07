@@ -504,7 +504,7 @@
           ${m.audio ? voiceBubble(m) : ''}
           ${m.img ? `<img src="${m.img}" alt="صورة" data-act="view" data-arg="${room}|${m.id}">` : ''}
           ${m.text ? `<div class="text">${rich(m.text)}</div>` : ''}
-          <span class="meta">${timeOf(m.at)}${mine ? (m.pending ? ' 🕓' : ' ✓') : ''}</span>
+          <span class="meta">${m.edited ? 'معدّلة · ' : ''}${timeOf(m.at)}${mine ? (m.pending ? ' 🕓' : ' ✓') : ''}</span>
         </div>
         ${reactsRow(room, m, false)}
       </div>`;
@@ -555,14 +555,46 @@
     if (!m || !canWrite(room)) return;
     const mine = (m.reacts || {})[uid()];
     const del = m.from === uid() || isParent();
+    const edit = m.from === uid() && m.text && !m.img && !m.audio && !m.sticker && !m.pending && room !== 'news';
     modal(`<div class="sheet small">
       <p class="muted small">${esc(nameOf(m.from))} · ${dayOf(m.at)} ${timeOf(m.at)}</p>
-      <div class="react-pick">${['❤️', '😂', '👍', '😮', '😢', '🎉', '🙏', '🌟'].map(e =>
-        `<button class="${mine === e ? 'on' : ''}" data-act="react" data-arg="${room}|${id}|${e}">${e}</button>`).join('')}</div>
+      <div class="react-pick">${PICK.map(e =>
+        `<button class="${mine === e ? 'on' : ''}" data-act="react" data-arg="${room}|${id}|${e}">${e}</button>`).join('')}${mine && !PICK.includes(mine)
+        ? `<button class="on" data-act="react" data-arg="${room}|${id}|${mine}">${mine}</button>` : ''}<button class="more" data-act="reactMore" data-arg="${id}" aria-label="إيموجي آخر">＋</button></div>
+      ${edit ? `<button class="btn plain wide" data-act="editMsg" data-arg="${id}">✏️ تعديل الرسالة</button>` : ''}
       ${m.text ? `<button class="btn plain wide" data-act="copy" data-arg="${id}">📋 نسخ النص</button>` : ''}
       ${del ? `<button class="btn plain wide danger-t" data-act="delMsg" data-arg="${room}|${id}">🗑️ حذف الرسالة</button>` : ''}
       <button class="btn plain wide" data-act="closeModal">إغلاق</button>
     </div>`);
+  }
+
+  const PICK = ['❤️', '😂', '👍', '😮', '😢', '🎉', '🙏', '🌟'];
+
+  // كل الإيموجي للتفاعل مع رسالة
+  function reactMore(id) {
+    const m = findMsg(room, id);
+    if (!m) return;
+    const mine = (m.reacts || {})[uid()];
+    modal(`<div class="sheet">
+      <h3>اختر تفاعلاً</h3>
+      ${Object.entries(EMOJI).map(([k, v]) =>
+        `<p class="panel-h">${k}</p><div class="emoji-grid">${v.split(' ').map(e =>
+          `<button class="${mine === e ? 'on' : ''}" data-act="react" data-arg="${room}|${id}|${e}">${e}</button>`).join('')}</div>`).join('')}
+      <button class="btn plain wide" data-act="msgMenu" data-arg="${id}">رجوع</button>
+    </div>`);
+  }
+
+  function editMsg(id) {
+    const m = findMsg(room, id);
+    if (!m || !m.text) return;
+    modal(`<div class="sheet small">
+      <h3>✏️ تعديل الرسالة</h3>
+      <textarea id="editTxt" class="text-in" rows="4" maxlength="3000">${esc(m.text)}</textarea>
+      <div class="row"><button class="btn green" data-act="saveEdit" data-arg="${room}|${id}">حفظ ✅</button><button class="btn plain" data-act="closeModal">إلغاء</button></div>
+    </div>`);
+    const t = $('editTxt');
+    t.focus();
+    t.setSelectionRange(t.value.length, t.value.length);
   }
 
   // ───── الرسائل الصوتية: تسجيل حتى دقيقة ويُحفظ داخل الرسالة ─────
@@ -1053,6 +1085,16 @@
       const mine = (m.reacts || {})[uid()];
       Cloud.react(r, id, mine === e ? null : e).catch(() => toast('⚠️ تعذّر التفاعل'));
       Sound.tap();
+      closeModal();
+    },
+    reactMore(id) { reactMore(id); Sound.tap(); },
+    editMsg(id) { editMsg(id); },
+    saveEdit(arg) {
+      const [r, id] = arg.split('|');
+      const m = findMsg(r, id);
+      const text = ($('editTxt').value || '').trim();
+      if (!m || !text) return;
+      if (text !== m.text) Cloud.edit(r, id, text).catch(() => toast('⚠️ تعذّر التعديل'));
       closeModal();
     },
     copy(id) {

@@ -233,13 +233,16 @@ const Cloud = (() => {
     return fb.fs.updateDoc(ref, { ['reacts.' + user.uid]: emoji || fb.fs.deleteField() });
   }
 
+  // صاحب الرسالة يعدّل نصها
+  const edit = (room, id, text) => fb.fs.updateDoc(famDoc('chatRooms', room, 'messages', id), { text, edited: Date.now() });
+
   const remove = (room, id) => fb.fs.deleteDoc(famDoc('chatRooms', room, 'messages', id));
 
   const me = () => (user ? users[user.uid] : null);
 
   return {
     start, signIn, signOut, join, createCode, saveProfile, beat, removeMember,
-    watch, msgsOf, send, react, remove,
+    watch, msgsOf, send, react, edit, remove,
     on: fn => listeners.push(fn),
     status: () => status,
     uid: () => (user ? user.uid : ''),
