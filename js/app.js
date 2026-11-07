@@ -90,16 +90,26 @@
   // ───── الأفراد والغرف ─────
   const uid = () => Cloud.uid();
   const users = () => Cloud.users();
-  const userOf = id => users()[id];
+  // الفرد الذي أُعيد ربطه بجهاز جديد: ملفه القديم فيه heir (حسابه الجديد)، وملفه الجديد فيه root (هويته الأولى)
+  const heirOf = id => { let x = id; for (let i = 0; i < 10 && users()[x] && users()[x].heir; i++) x = users()[x].heir; return x; };
+  const userOf = id => users()[heirOf(id)] || users()[id];
   const nameOf = id => (userOf(id) ? userOf(id).name : 'فرد سابق');
-  const others = () => Object.values(users()).filter(u => u.id !== uid()).sort((a, b) => (a.at || 0) - (b.at || 0));
+  const isMe = id => !!id && heirOf(id) === uid();
+  // هوية الفرد الثابتة التي تُسمّى بها محادثاته الخاصة
+  const keyOf = id => { const u = userOf(id); return u ? u.root || u.id : id; };
+  const myKey = () => keyOf(uid());
+  const active = () => Object.values(users()).filter(u => !u.left && !u.heir).sort((a, b) => (a.at || 0) - (b.at || 0));
+  // المفصولون الذين لم يُعَد ربطهم بعد
+  const former = () => Object.values(users()).filter(u => u.left && (!u.heir || !users()[heirOf(u.id)]));
+  const others = () => active().filter(u => u.id !== uid());
   const dmId = (a, b) => 'dm_' + [a, b].sort().join('_');
+  const dmWith = id => dmId(myKey(), keyOf(id));
   const dmPeers = r => r.slice(3).split('_');
   const isParent = () => Cloud.role() === 'parent';
   const ROLE_BADGE = { parent: '👑 ولي الأمر', adult: '⭐ ولي أمر', kid: '' };
   // لون ثابت لاسم كل فرد في محادثة العائلة
   const COLORS = ['#e0701a', '#1b7a45', '#cc3a76', '#3a76cf', '#8a47ad', '#13807c', '#b8500c', '#a32a5b'];
-  const colorOf = id => COLORS[[...String(id)].reduce((n, c) => n + c.charCodeAt(0), 0) % COLORS.length];
+  const colorOf = id => COLORS[[...String(keyOf(id))].reduce((n, c) => n + c.charCodeAt(0), 0) % COLORS.length];
 
   // المجموعات: غرف للعائلة كلها ينشئها ولي الأمر، معرّفها يبدأ بـ g_
   const isGroup = r => r.startsWith('g_');
@@ -110,10 +120,10 @@
     if (r === 'news') return '📰 أخبار العائلة';
     if (isGroup(r)) { const g = groupOf(r); return g ? `${g.icon} ${g.name}` : 'مجموعة محذوفة'; }
     const peers = dmPeers(r);
-    if (!peers.includes(uid())) return peers.map(nameOf).join(' و ');
-    return nameOf(peers.find(p => p !== uid()) || uid());
+    if (!peers.includes(myKey())) return peers.map(nameOf).join(' و ');
+    return nameOf(peers.find(p => p !== myKey()) || uid());
   }
-  const canWrite = r => r === 'family' || r === 'news' || (isGroup(r) ? !!groupOf(r) : dmPeers(r).includes(uid()));
+  const canWrite = r => r === 'family' || r === 'news' || (isGroup(r) ? !!groupOf(r) : dmPeers(r).includes(myKey()));
   // الرسائل الخاصة يوقفها ولي الأمر، وتبقى المحادثة معه هو متاحة
   const dmOpen = r => !r.startsWith('dm_') || isParent() || !Cloud.dmOff() || dmPeers(r).includes(Cloud.fid());
   const canSend = r => canWrite(r) && dmOpen(r);
@@ -121,11 +131,11 @@
   // كل الغرف التي نتابعها: العائلة والأخبار ومحادثاتي الخاصة، وولي الأمر يرى محادثات الأبناء أيضاً
   function allRooms() {
     const list = ['family', 'news'].concat(Cloud.groups().map(g => g.id));
-    const ids = Object.keys(users());
-    others().forEach(u => list.push(dmId(uid(), u.id)));
+    const ids = active().map(u => keyOf(u.id));
+    others().forEach(u => list.push(dmWith(u.id)));
     if (isParent()) {
       ids.forEach((a, i) => ids.slice(i + 1).forEach(b => {
-        if (a !== uid() && b !== uid()) list.push(dmId(a, b));
+        if (a !== myKey() && b !== myKey()) list.push(dmId(a, b));
       }));
     }
     return list;
@@ -136,7 +146,7 @@
   const read = ls.get('family-chat-read', {});
   if (!read._base) { read._base = Date.now(); ls.set('family-chat-read', read); }
   const lastRead = r => Math.max(read[r] || 0, read._base);
-  const unreadOf = r => Cloud.msgsOf(r).filter(m => m.from !== uid() && m.at > lastRead(r)).length;
+  const unreadOf = r => Cloud.msgsOf(r).filter(m => !isMe(m.from) && m.at > lastRead(r)).length;
   function markRead(r) {
     const msgs = Cloud.msgsOf(r);
     const at = msgs.length ? msgs[msgs.length - 1].at : 0;
@@ -279,7 +289,7 @@
 
   function preview(m) {
     if (!m) return '<i>لا رسائل بعد، ابدأ أنت! 👋</i>';
-    const who = m.from === uid() ? 'أنت: ' : '';
+    const who = isMe(m.from) ? 'أنت: ' : '';
     if (m.sticker) return `${who}✨ ملصق`;
     if (m.audio) return `${who}🎤 رسالة صوتية`;
     if (m.img) return `${who}📷 صورة${m.text ? ' · ' + esc(m.text.slice(0, 40)) : ''}`;
@@ -298,7 +308,7 @@
   }
 
   function chatsTab() {
-    const fam = others().filter(u => dmOpen(dmId(uid(), u.id)));
+    const fam = others().filter(u => dmOpen(dmWith(u.id)));
     const dmNote = !isParent() && Cloud.dmOff()
       ? '<div class="card empty"><p>🔒 أوقف ولي الأمر الرسائل الخاصة حالياً، ويمكنك مراسلته هو.</p><p class="muted small">تكلّم مع الجميع في «بيت العائلة» 🏡</p></div>' : '';
     const famIcon = `<span class="av family-av">🏡</span>`;
@@ -310,8 +320,8 @@
     } else if (!fam.length) {
       h += `<div class="card empty"><p>لا يوجد أفراد آخرون بعد.</p>${isParent() ? '<button class="btn pink" data-act="tab" data-arg="family">➕ أضف أفراد العائلة</button>' : '<p class="muted small">اطلب من ولي الأمر أن يضيف إخوتك.</p>'}</div>`;
     } else {
-      const sorted = fam.slice().sort((a, b) => lastAt(dmId(uid(), b.id)) - lastAt(dmId(uid(), a.id)));
-      h += `<div class="card list">${sorted.map(u => roomRow(dmId(uid(), u.id),
+      const sorted = fam.slice().sort((a, b) => lastAt(dmWith(b.id)) - lastAt(dmWith(a.id)));
+      h += `<div class="card list">${sorted.map(u => roomRow(dmWith(u.id),
         `<span class="av-wrap">${Art.avatar(u.avatar)}${online(u) ? '<i class="online"></i>' : ''}</span>`,
         `${esc(u.name)} ${ROLE_BADGE[u.role] ? `<em class="role">${ROLE_BADGE[u.role]}</em>` : ''}`)).join('')}</div>`;
     }
@@ -389,7 +399,7 @@
   // ───── العائلة ─────
   function familyTab() {
     const me = Cloud.me();
-    const list = Object.values(users()).sort((a, b) => (a.at || 0) - (b.at || 0));
+    const list = active();
     let h = `<div class="card me-card">${Art.avatar(me.avatar, 'lg')}<div><b>${esc(me.name)}</b><small>${ROLE_BADGE[me.role] || '🌟 من أبطال العائلة'}</small></div>
       <button class="btn small blue" data-act="editProfile">✏️ تعديل</button></div>`;
     h += `<div class="card"><h3>🌍 عالمي</h3><div class="look-pick">
@@ -398,11 +408,11 @@
     h += `<div class="card"><h3>👨‍👩‍👧‍👦 أفراد العائلة (${list.length})</h3><ul class="members">${list.map(u => `<li>
       <span class="av-wrap">${Art.avatar(u.avatar)}${online(u) ? '<i class="online"></i>' : ''}</span>
       <span class="m-main"><b>${esc(u.name)}${u.id === uid() ? ' (أنت)' : ''}</b><small>${ROLE_BADGE[u.role] ? ROLE_BADGE[u.role] + ' · ' : ''}${u.id === uid() ? 'متصل الآن' : ago(u.seen || 0)}</small></span>
-      ${u.id !== uid() && dmOpen(dmId(uid(), u.id)) ? `<button class="btn small pink" data-act="open" data-arg="${dmId(uid(), u.id)}">💌</button>` : ''}
+      ${u.id !== uid() && dmOpen(dmWith(u.id)) ? `<button class="btn small pink" data-act="open" data-arg="${dmWith(u.id)}">💌</button>` : ''}
       ${isParent() && u.id !== uid() ? `<button class="btn small blue" data-act="peek" data-arg="${u.id}" aria-label="محادثات ${esc(u.name)}">👀</button>` : ''}
       ${isParent() && u.id !== uid() ? `<button class="link-btn danger small" data-act="removeMember" data-arg="${u.id}">فصل</button>` : ''}
     </li>`).join('')}</ul></div>`;
-    if (isParent()) h += addMemberBox() + groupsBox() + kidsChats();
+    if (isParent()) h += formerBox() + addMemberBox() + groupsBox() + kidsChats();
     h += `<div class="card"><h3>⚙️ الإعدادات</h3>
       <div class="setting"><span>🔔 تنبيه عند وصول رسالة</span><button class="switch ${notifyOn() ? 'on' : ''}" data-act="toggleNotify"><i></i></button></div>
       <div class="setting"><span>🔊 الأصوات</span><button class="switch ${ls.get('family-chat-muted', false) ? '' : 'on'}" data-act="toggleMute"><i></i></button></div>
@@ -433,13 +443,27 @@
       <button class="btn green wide" data-act="addGroup">➕ أنشئ المجموعة</button></div>`;
   }
 
+  // الأفراد المفصولون: ولي الأمر يعيد ربط أحدهم بجهاز جديد فيرجع بنفس اسمه ورسائله ومحادثاته
+  function formerBox() {
+    const list = former();
+    if (!list.length) return '';
+    return `<div class="card"><h3>🔌 أفراد مفصولون (${list.length})</h3>
+      <p class="muted small">أعد ربط أحدهم برمز QR فيرجع على جهازه بنفس اسمه وصورته ورسائله ومحادثاته.</p>
+      <ul class="members">${list.map(u => `<li>
+      <span class="av-wrap">${Art.avatar(u.avatar)}</span>
+      <span class="m-main"><b>${esc(u.name)}</b><small>${ROLE_BADGE[u.role] ? ROLE_BADGE[u.role] + ' · ' : ''}فُصل ${dayOf(u.left)}</small></span>
+      <button class="btn small green" data-act="relink" data-arg="${u.id}">🔁 إعادة ربط</button>
+      <button class="link-btn danger small" data-act="forget" data-arg="${u.id}">حذف</button>
+    </li>`).join('')}</ul></div>`;
+  }
+
   function addMemberBox() {
     if (pairing && pairing.exp > Date.now()) {
       const qr = qrcode(0, 'M');
       qr.addData(`${location.origin}${location.pathname}#join=${pairing.code}`);
       qr.make();
       return `<div class="card pair-box ${pairing.ready ? '' : 'pending'}">
-        <h3>📱 أضف ${esc(pairing.name || 'فرداً')}</h3>
+        <h3>${pairing.relink ? `🔁 إعادة ربط ${esc(pairing.name)}` : `📱 أضف ${esc(pairing.name || 'فرداً')}`}</h3>
         <p>على جهاز ${esc(pairing.name || 'الفرد الجديد')}: افتح مجلس العائلة ← «انضم برمز QR» ثم امسح الرمز، أو امسحه بكاميرا الجهاز مباشرة.</p>
         <div class="qr">${qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true })}</div>
         <b class="pair-code" dir="ltr">${pairing.code.slice(0, 4)}-${pairing.code.slice(4)}</b>
@@ -459,7 +483,7 @@
 
   // ولي الأمر يطّلع على المحادثات الخاصة بين الأبناء
   function kidsChats() {
-    const rows = allRooms().filter(r => r.startsWith('dm_') && !dmPeers(r).includes(uid()) && Cloud.msgsOf(r).length);
+    const rows = allRooms().filter(r => r.startsWith('dm_') && !dmPeers(r).includes(myKey()) && Cloud.msgsOf(r).length);
     if (!rows.length) return '';
     return `<div class="card"><h3>👀 محادثات الأبناء الخاصة</h3><div class="list">${rows.map(r => {
       const [a, b] = dmPeers(r).map(userOf);
@@ -471,7 +495,7 @@
   function showPeek() {
     const u = userOf(peek);
     const rooms = others().concat(isParent() ? [Cloud.me()] : []).filter(o => o && o.id !== peek)
-      .map(o => ({ o, r: dmId(peek, o.id) }))
+      .map(o => ({ o, r: dmId(keyOf(peek), keyOf(o.id)) }))
       .filter(x => Cloud.msgsOf(x.r).length)
       .sort((a, b) => lastAt(b.r) - lastAt(a.r));
     const rows = rooms.map(({ o, r }) => roomRow(r,
@@ -497,16 +521,16 @@
     let icon, sub;
     if (r === 'family') {
       icon = '<span class="av family-av">🏡</span>';
-      sub = Object.values(users()).map(u => esc(u.name)).join('، ');
+      sub = active().map(u => esc(u.name)).join('، ');
     } else if (r === 'news') {
       icon = '<span class="av family-av">📰</span>'; sub = '';
     } else if (isGroup(r)) {
       const g = groupOf(r);
       icon = `<span class="av family-av">${esc(g ? g.icon : '💬')}</span>`;
-      sub = Object.values(users()).map(u => esc(u.name)).join('، ');
+      sub = active().map(u => esc(u.name)).join('، ');
     } else {
       const peers = dmPeers(r);
-      const other = userOf(peers.find(p => p !== uid())) || userOf(peers[0]);
+      const other = userOf(peers.find(p => p !== myKey())) || userOf(peers[0]);
       icon = `<span class="av-wrap">${Art.avatar(other ? other.avatar : '🙂')}${online(other) ? '<i class="online"></i>' : ''}</span>`;
       sub = !canWrite(r) ? '👀 أنت تطّلع على هذه المحادثة فقط'
         : !canSend(r) ? '🔒 أوقف ولي الأمر الرسائل الخاصة' : (other ? ago(other.seen || 0) : '');
@@ -554,7 +578,7 @@
     if (!box) return;
     const near = first || box.scrollHeight - box.scrollTop - box.clientHeight < 120;
     const msgs = Cloud.msgsOf(room);
-    const group = room === 'family' || isGroup(room) || !dmPeers(room).includes(uid());
+    const group = room === 'family' || isGroup(room) || !dmPeers(room).includes(myKey());
     let h = '', lastDay = '', lastFrom = '';
     if (!msgs.length) {
       h = Cloud.roomReady(room)
@@ -564,10 +588,10 @@
     msgs.forEach(m => {
       const day = dayOf(m.at);
       if (day !== lastDay) { h += `<div class="day"><span>${day}</span></div>`; lastDay = day; lastFrom = ''; }
-      const mine = m.from === uid();
+      const mine = isMe(m.from);
       const u = userOf(m.from);
-      const head = !mine && group && m.from !== lastFrom;
-      lastFrom = m.from;
+      const head = !mine && group && keyOf(m.from) !== lastFrom;
+      lastFrom = keyOf(m.from);
       const kind = m.sticker ? 'is-sticker' : m.audio ? 'is-audio' : m.img ? 'is-img' : (m.text && onlyEmoji(m.text) ? 'is-jumbo' : '');
       h += `<div class="msg ${mine ? 'mine' : 'theirs'} ${kind} ${head ? 'head' : ''}" data-id="${m.id}">
         ${!mine && group ? `<span class="m-av">${head ? Art.avatar(u ? u.avatar : '🙂', 'sm') : ''}</span>` : ''}
@@ -595,7 +619,7 @@
   const snippet = m => m.sticker ? '✨ ملصق' : m.audio ? '🎤 رسالة صوتية'
     : m.img ? '📷 صورة' + (m.text ? ' · ' + m.text : '') : (m.text || '');
   const cut = (t, n) => [...t.replace(/\s+/g, ' ')].slice(0, n).join('');
-  const replyWho = id => (id === uid() ? 'أنت' : nameOf(id));
+  const replyWho = id => (isMe(id) ? 'أنت' : nameOf(id));
   // الاقتباس داخل الفقاعة: يظهر النص الحالي للرسالة الأصلية إن كانت معروضة، وإلا المقتطف المحفوظ
   function quote(q) {
     const orig = findMsg(room, q.id);
@@ -607,7 +631,7 @@
     if (!bar) return;
     const m = replyTo && replyTo.room === room ? findMsg(room, replyTo.id) : null;
     bar.hidden = !m;
-    bar.innerHTML = m ? `<span class="rq-main" style="--qc:${colorOf(m.from)}"><b>↩️ الرد على ${esc(m.from === uid() ? 'رسالتك' : nameOf(m.from))}</b><small>${esc(cut(snippet(m), 120))}</small></span>
+    bar.innerHTML = m ? `<span class="rq-main" style="--qc:${colorOf(m.from)}"><b>↩️ الرد على ${esc(isMe(m.from) ? 'رسالتك' : nameOf(m.from))}</b><small>${esc(cut(snippet(m), 120))}</small></span>
       <button class="ic" data-act="replyCancel" aria-label="إلغاء الرد">✖</button>` : '';
   }
   // يأخذ الرد المعلّق لهذه الغرفة ليُرسل مع الرسالة، ثم يخفي شريط الرد
@@ -1088,7 +1112,7 @@
   // ───── التنبيهات ─────
   const notifyOn = () => ls.get('family-chat-notify', false) && 'Notification' in window && Notification.permission === 'granted';
   function alertNew(r, fresh) {
-    const incoming = fresh.filter(m => m.from !== uid() && !m.pending && Date.now() - m.at < 120000);
+    const incoming = fresh.filter(m => !isMe(m.from) && !m.pending && Date.now() - m.at < 120000);
     if (!incoming.length || !canWrite(r)) return;
     const visibleHere = room === r && document.visibilityState === 'visible';
     if (visibleHere) { Sound.tap(); return; }
@@ -1120,6 +1144,17 @@
     panel = null;
     replyTo = null;
     render();
+  }
+
+  // يُظهر رمز QR لإضافة فرد أو لإعادة ربط فرد مفصول
+  function startPair(hint, name, relink) {
+    const { code, exp, ready } = Cloud.createCode(hint);
+    pairing = { code, exp, ready: false, name, relink, known: new Set(Object.keys(users())) };
+    render();
+    const mine = () => pairing && pairing.code === code;
+    ready.then(() => { if (mine()) { pairing.ready = true; refresh(); } })
+      .catch(() => { if (mine()) { pairing = null; refresh(); toast('⚠️ تعذّر إنشاء الرمز. تأكد من الإنترنت.'); } });
+    setTimeout(() => { if (mine()) { pairing = null; refresh(); } }, exp - Date.now() + 500);
   }
 
   const actions = {
@@ -1312,14 +1347,21 @@
       const name = $('pairName').value.trim();
       const on = document.querySelector('#pairRole .chip.on');
       const role = on ? on.dataset.arg : 'K';
-      const { code, exp, ready } = Cloud.createCode(`${role}|${name}`);
-      pairing = { code, exp, ready: false, name, since: Date.now() };
       $('pairName').blur();
-      render();
-      const mine = () => pairing && pairing.code === code;
-      ready.then(() => { if (mine()) { pairing.ready = true; refresh(); } })
-        .catch(() => { if (mine()) { pairing = null; refresh(); toast('⚠️ تعذّر إنشاء الرمز. تأكد من الإنترنت.'); } });
-      setTimeout(() => { if (mine()) { pairing = null; refresh(); } }, exp - Date.now() + 500);
+      startPair(`${role}|${name}`, name);
+    },
+    // رمز يعيد فرداً مفصولاً بنفس هويته
+    relink(id) {
+      const u = users()[id];
+      if (!u) return;
+      startPair(`R|${id}`, u.name, true);
+      const box = document.querySelector('.pair-box');
+      if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    forget(id) {
+      const u = users()[id];
+      if (!u || !confirm(`حذف ${u.name} نهائياً؟ لن تستطيع إعادة ربطه بنفس الهوية، وتظهر رسائله باسم «فرد سابق».`)) return;
+      Cloud.forget(id).catch(() => toast('⚠️ تعذّر الحذف'));
     },
     cancelPair() { pairing = null; render(); },
 
@@ -1417,7 +1459,7 @@
     if (what === 'users') {
       // انضم فرد جديد بعد إنشاء الرمز: نخفي الرمز ونرحّب به
       if (pairing) {
-        const fresh = Object.values(users()).find(u => u.id !== uid() && (u.at || 0) > pairing.since);
+        const fresh = active().find(u => u.id !== uid() && !pairing.known.has(u.id));
         if (fresh) { pairing = null; Sound.pop(); toast(`🎉 انضم ${fresh.name} إلى العائلة!`, 4000); }
       }
       if (Cloud.me()) {

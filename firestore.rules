@@ -51,14 +51,32 @@ service cloud.firestore {
       }
       // ───── شات العائلة ─────
       // ملف كل فرد في الشات: يكتبه صاحبه فقط، ويقرؤه كل أفراد العائلة
+      // left: وقت فصل الفرد (يبقى ملفه لتبقى رسائله باسمه)، root: الهوية الأولى لفرد أُعيد ربطه بجهاز جديد،
+      // heir: الحساب الجديد الذي ورث هذا الملف بعد إعادة الربط
       match /chatUsers/{uid} {
         allow read: if isMember(fid);
         allow create, update: if isMember(fid) && request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['name', 'avatar', 'role', 'look', 'seen', 'at'])
+          && request.resource.data.keys().hasOnly(['name', 'avatar', 'role', 'look', 'seen', 'at', 'left', 'root'])
           && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 30
           && request.resource.data.avatar is string && request.resource.data.avatar.size() <= 40
-          && request.resource.data.role in ['kid', 'adult'];
+          && request.resource.data.role in ['kid', 'adult']
+          && (!('left' in request.resource.data) || request.resource.data.left is number)
+          && (!('root' in request.resource.data) || (request.resource.data.root is string && request.resource.data.root.size() <= 128));
         allow delete: if isMember(fid) && request.auth.uid == uid;
+        // إعادة الربط: جهاز انضم برمز «R|معرّف الملف» يكتب نفسه وريثاً لهذا الملف المفصول،
+        // أو لملف أقدم كان وريثه ذلك الملف
+        allow update: if isMember(fid) && request.auth.uid != uid && 'left' in resource.data
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['heir'])
+          && request.resource.data.heir == request.auth.uid
+          && relinkOk(uid, resource.data.get('heir', ''));
+      }
+      function relinkOk(uid, heir) {
+        let kid = pairCode(get(/databases/$(database)/documents/families/$(fid)/members/$(request.auth.uid)).data.code).kid;
+        return kid == 'R|' + uid || (heir != '' && kid == 'R|' + heir);
+      }
+      // ورث هذا الحساب ملف الفرد x بعد إعادة ربطه
+      function heirOf(x) {
+        return get(/databases/$(database)/documents/families/$(fid)/chatUsers/$(x)).data.get('heir', '') == request.auth.uid;
       }
 
       // الغرف: family للعائلة كلها، news للأخبار، dm_{uid}_{uid} محادثة خاصة بين اثنين فقط،
@@ -66,7 +84,8 @@ service cloud.firestore {
       // (ولي الأمر يصل إلى كل شيء بالقاعدة العامة أعلاه)
       function inRoom(room) {
         return room == 'family' || room == 'news'
-          || (room.matches('dm_[A-Za-z0-9]+_[A-Za-z0-9]+') && request.auth.uid in room.split('_'))
+          || (room.matches('dm_[A-Za-z0-9]+_[A-Za-z0-9]+') && (request.auth.uid in room.split('_')
+              || heirOf(room.split('_')[1]) || heirOf(room.split('_')[2])))
           || (room.matches('g_[A-Za-z0-9]+')
               && exists(/databases/$(database)/documents/families/$(fid)/chatConfig/settings)
               && room in get(/databases/$(database)/documents/families/$(fid)/chatConfig/settings).data.get('groups', {}));

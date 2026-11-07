@@ -122,6 +122,8 @@ const Cloud = (() => {
   // الجهاز يخرج من المجلس: يبقى مرتبطاً بالألعاب إن كان مرتبطاً بها
   async function signOut() {
     if (user && user.isAnonymous && fid) {
+      // يبقى ملفه في المجلس معلَّماً بالفصل، ليعيد ولي الأمر ربطه لاحقاً بنفس الهوية
+      if (users[user.uid]) await fb.fs.updateDoc(famDoc('chatUsers', user.uid), { left: Date.now() }).catch(() => {});
       const ref = famDoc('members', user.uid);
       await (otherApps(memberData)
         ? fb.fs.updateDoc(ref, { ['apps.' + APP]: fb.fs.deleteField() })
@@ -181,17 +183,39 @@ const Cloud = (() => {
         apps[APP] = '';
         await fb.fs.setDoc(mref, { ...entry, kid: old.kid || '', apps });
       }
+      await relink(c, cred.uid);
       ls.set(FID_KEY, c.fid);
       ls.set('family-chat-nolink', null);
       joining = false;
       onUser(cred);
-      return c.kid || '';
+      return /^R\|/.test(c.kid || '') ? '' : c.kid || '';
     } finally { joining = false; }
+  }
+
+  // عودة فرد مفصول: رمز «R|معرّف ملفه» يجعل هذا الحساب وريثاً لملفه (ولملفاته الأقدم)،
+  // فيرجع باسمه وصورته وتظهر رسائله القديمة باسمه وتعود محادثاته الخاصة
+  async function relink(c, uid) {
+    const docOf = id => fb.fs.doc(fb.db, 'families', c.fid, 'chatUsers', id);
+    const mine = await fb.fs.getDocFromServer(docOf(uid)).catch(() => null);
+    const old = (c.kid || '').startsWith('R|') ? c.kid.slice(2) : '';
+    // نفس الحساب رجع (جهاز بقي مرتبطاً بالألعاب): يكفي أن نزيل علامة الفصل
+    if (!old || old === uid) {
+      if (mine && mine.exists() && 'left' in mine.data()) await fb.fs.updateDoc(docOf(uid), { left: fb.fs.deleteField() });
+      return;
+    }
+    const snap = await fb.fs.getDocFromServer(docOf(old));
+    if (!snap.exists()) return;
+    const o = snap.data();
+    const older = await fb.fs.getDocsFromServer(fb.fs.query(fb.fs.collection(fb.db, 'families', c.fid, 'chatUsers'), fb.fs.where('heir', '==', old)));
+    await Promise.all([docOf(old), ...older.docs.map(d => d.ref)].map(ref => fb.fs.updateDoc(ref, { heir: uid })));
+    await fb.fs.setDoc(docOf(uid), { name: o.name, avatar: o.avatar, role: o.role, look: o.look || 'falfoula',
+      seen: Date.now(), at: o.at || Date.now(), root: o.root || old });
   }
 
   // ───── الملفات ─────
   function saveProfile(p) {
     const data = { name: p.name.slice(0, 30), avatar: p.avatar, role: p.role, look: p.look, seen: Date.now(), at: (me() && me().at) || Date.now() };
+    if (me() && me().root) data.root = me().root;
     return fb.fs.setDoc(famDoc('chatUsers', user.uid), data);
   }
   let lastBeat = 0;
@@ -201,10 +225,15 @@ const Cloud = (() => {
     fb.fs.updateDoc(famDoc('chatUsers', user.uid), { seen: Date.now() }).catch(() => {});
   }
 
-  // ولي الأمر يفصل جهازاً عن العائلة كلها (المجلس والألعاب)
+  // ولي الأمر يفصل جهازاً عن العائلة كلها (المجلس والألعاب)، ويبقى ملفه معلَّماً بالفصل لإعادة ربطه لاحقاً
   async function removeMember(id) {
     await fb.fs.deleteDoc(famDoc('members', id)).catch(() => {});
-    await fb.fs.deleteDoc(famDoc('chatUsers', id));
+    await fb.fs.updateDoc(famDoc('chatUsers', id), { left: Date.now() });
+  }
+  // ولي الأمر يحذف ملف فرد مفصول وملفاته الأقدم نهائياً (تبقى رسائله باسم «فرد سابق»)
+  async function forget(id) {
+    const older = Object.values(users).filter(u => u.heir === id).map(u => u.id);
+    await Promise.all([id, ...older].map(x => fb.fs.deleteDoc(famDoc('chatUsers', x))));
   }
 
   // ولي الأمر يوقف الرسائل الخاصة أو يعيدها
@@ -276,7 +305,7 @@ const Cloud = (() => {
   const me = () => (user ? users[user.uid] : null);
 
   return {
-    start, signIn, signOut, join, createCode, saveProfile, beat, removeMember, setDmOff,
+    start, signIn, signOut, join, createCode, saveProfile, beat, removeMember, forget, setDmOff,
     groups, addGroup, renameGroup, removeGroup,
     watch, msgsOf, send, react, edit, remove,
     on: fn => listeners.push(fn),
