@@ -71,7 +71,7 @@ service cloud.firestore {
       }
       function validMsg() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['from', 'at', 'text', 'img', 'sticker', 'title', 'reacts', 'audio', 'dur'])
+        return d.keys().hasOnly(['from', 'at', 'text', 'img', 'sticker', 'title', 'reacts', 'audio', 'dur', 'reply'])
           && d.from == request.auth.uid
           && d.at is number
           && (!('text' in d) || (d.text is string && d.text.size() <= 3000))
@@ -80,7 +80,12 @@ service cloud.firestore {
           && (!('img' in d) || (d.img is string && d.img.size() <= 950000))
           && (!('audio' in d) || (d.audio is string && d.audio.size() <= 950000))
           && (!('dur' in d) || (d.dur is number && d.dur > 0 && d.dur <= 61))
-          && (!('reacts' in d) || (d.reacts is map && d.reacts.size() == 0));
+          && (!('reacts' in d) || (d.reacts is map && d.reacts.size() == 0))
+          // الرد على رسالة: معرّفها وصاحبها ومقتطف قصير منها
+          && (!('reply' in d) || (d.reply is map && d.reply.keys().hasOnly(['id', 'from', 'text'])
+              && d.reply.id is string && d.reply.id.size() <= 40
+              && d.reply.from is string && d.reply.from.size() <= 128
+              && d.reply.text is string && d.reply.text.size() <= 300));
       }
       // إعدادات المجلس (dmOff والمجموعات groups): يكتبها ولي الأمر (بالقاعدة العامة)، ويقرؤها كل أفراد العائلة
       match /chatConfig/{doc} {

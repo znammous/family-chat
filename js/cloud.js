@@ -256,7 +256,7 @@ const Cloud = (() => {
 
   function send(room, msg) {
     const data = { from: user.uid, at: Date.now() };
-    ['text', 'img', 'sticker', 'title', 'audio', 'dur'].forEach(k => { if (msg[k]) data[k] = msg[k]; });
+    ['text', 'img', 'sticker', 'title', 'audio', 'dur', 'reply'].forEach(k => { if (msg[k]) data[k] = msg[k]; });
     // نعيد المعرّف فوراً؛ Firestore يرفع الرسالة عند عودة الاتصال إن كان الجهاز بلا إنترنت
     const ref = fb.fs.doc(famCol('chatRooms', room, 'messages'));
     const done = fb.fs.setDoc(ref, data);

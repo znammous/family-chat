@@ -18,6 +18,7 @@
   let joinHint = '';
   let pendingImg = null;    // صورة تنتظر الإرسال: { room, data }
   let newsDraft = null;     // خبر يُكتب: { img }
+  let replyTo = null;       // رسالة نرد عليها: { room, id }
   let deferred = false;     // إعادة رسم مؤجلة حتى لا يُمسح ما يكتبه المستخدم
   let look = ls.get('family-chat-look', 'falfoula');
 
@@ -517,6 +518,7 @@
       </header>
       <div class="msgs" id="msgs"></div>
       ${canSend(r) ? `<div class="panel" id="panel" hidden></div>
+      <div class="reply-bar" id="replyBar" hidden></div>
       <footer class="composer">
         <button class="ic" data-act="panel" data-arg="sticker" aria-label="ملصقات">${Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'cheer', 'mini')}</button>
         <button class="ic" data-act="panel" data-arg="emoji" aria-label="إيموجي">😊</button>
@@ -533,12 +535,15 @@
       </footer>` : ''}
     </div>`;
     refreshRoom(true);
+    paintReply();
+    if (canSend(r)) swipeToReply($('msgs'));
     const t = $('txt');
     if (t) {
       t.addEventListener('input', grow);
       t.addEventListener('keydown', e => {
         // Enter يرسل على لوحة المفاتيح العادية، و Shift+Enter سطر جديد
         if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); actions.sendText(); }
+        if (e.key === 'Escape' && replyTo) actions.replyCancel();
       });
     }
   }
@@ -568,6 +573,7 @@
         ${!mine && group ? `<span class="m-av">${head ? Art.avatar(u ? u.avatar : '🙂', 'sm') : ''}</span>` : ''}
         <div class="bubble" data-act="msgMenu" data-arg="${m.id}">
           ${head ? `<b class="who" style="color:${colorOf(m.from)}">${esc(nameOf(m.from))}</b>` : ''}
+          ${m.reply ? quote(m.reply) : ''}
           ${m.sticker ? Art.sticker(m.sticker) : ''}
           ${m.audio ? voiceBubble(m) : ''}
           ${m.img ? `<img src="${m.img}" alt="صورة" data-act="view" data-arg="${room}|${m.id}">` : ''}
@@ -582,6 +588,69 @@
     if (near) box.scrollTop = box.scrollHeight;
     markRead(room);
     badge();
+  }
+
+  // ───── الرد على رسالة ─────
+  // مقتطف قصير من الرسالة يُحفظ مع الرد عليها
+  const snippet = m => m.sticker ? '✨ ملصق' : m.audio ? '🎤 رسالة صوتية'
+    : m.img ? '📷 صورة' + (m.text ? ' · ' + m.text : '') : (m.text || '');
+  const cut = (t, n) => [...t.replace(/\s+/g, ' ')].slice(0, n).join('');
+  const replyWho = id => (id === uid() ? 'أنت' : nameOf(id));
+  // الاقتباس داخل الفقاعة: يظهر النص الحالي للرسالة الأصلية إن كانت معروضة، وإلا المقتطف المحفوظ
+  function quote(q) {
+    const orig = findMsg(room, q.id);
+    return `<div class="quote" data-act="jumpTo" data-arg="${esc(q.id)}" style="--qc:${colorOf(q.from)}">
+      <b>${esc(replyWho(q.from))}</b><small>${esc(orig ? cut(snippet(orig), 120) : q.text || '')}</small></div>`;
+  }
+  function paintReply() {
+    const bar = $('replyBar');
+    if (!bar) return;
+    const m = replyTo && replyTo.room === room ? findMsg(room, replyTo.id) : null;
+    bar.hidden = !m;
+    bar.innerHTML = m ? `<span class="rq-main" style="--qc:${colorOf(m.from)}"><b>↩️ الرد على ${esc(m.from === uid() ? 'رسالتك' : nameOf(m.from))}</b><small>${esc(cut(snippet(m), 120))}</small></span>
+      <button class="ic" data-act="replyCancel" aria-label="إلغاء الرد">✖</button>` : '';
+  }
+  // يأخذ الرد المعلّق لهذه الغرفة ليُرسل مع الرسالة، ثم يخفي شريط الرد
+  function takeReply(r) {
+    if (!replyTo || replyTo.room !== r) return null;
+    const m = findMsg(r, replyTo.id);
+    replyTo = null;
+    paintReply();
+    return m ? { id: m.id, from: m.from, text: cut(snippet(m), 120) } : null;
+  }
+  // سحب الفقاعة يميناً أو يساراً على الجوال يرد عليها
+  function swipeToReply(box) {
+    let s = null;
+    const reset = () => {
+      if (!s) return;
+      const { b } = s;
+      s = null;
+      b.style.transition = 'transform .15s';
+      b.style.transform = '';
+      setTimeout(() => { b.style.transition = ''; }, 160);
+    };
+    box.addEventListener('touchstart', e => {
+      const b = e.target.closest('.bubble');
+      if (!b || e.touches.length > 1) { s = null; return; }
+      const t = e.touches[0];
+      s = { b, x: t.clientX, y: t.clientY, dx: 0, lock: '' };
+    }, { passive: true });
+    box.addEventListener('touchmove', e => {
+      if (!s) return;
+      const t = e.touches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
+      if (!s.lock && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) s.lock = Math.abs(dx) > Math.abs(dy) * 1.5 ? 'x' : 'y';
+      if (s.lock !== 'x') return;
+      s.dx = dx;
+      s.b.style.transform = `translateX(${Math.max(-70, Math.min(70, dx))}px)`;
+    }, { passive: true });
+    box.addEventListener('touchend', () => {
+      if (!s) return;
+      const go = s.lock === 'x' && Math.abs(s.dx) > 55;
+      const msg = s.b.closest('.msg');
+      reset();
+      if (go && msg) { actions.reply(msg.dataset.id); if (navigator.vibrate) navigator.vibrate(20); }
+    });
+    box.addEventListener('touchcancel', reset);
   }
 
   // لوحة الإيموجي والملصقات
@@ -629,6 +698,7 @@
       <div class="react-pick">${PICK.map(e =>
         `<button class="${mine === e ? 'on' : ''}" data-act="react" data-arg="${room}|${id}|${e}">${e}</button>`).join('')}${mine && !PICK.includes(mine)
         ? `<button class="on" data-act="react" data-arg="${room}|${id}|${mine}">${mine}</button>` : ''}<button class="more" data-act="reactMore" data-arg="${id}" aria-label="إيموجي آخر">＋</button></div>
+      ${canSend(room) && room !== 'news' ? `<button class="btn plain wide" data-act="reply" data-arg="${id}">↩️ رد</button>` : ''}
       ${edit ? `<button class="btn plain wide" data-act="editMsg" data-arg="${id}">✏️ تعديل الرسالة</button>` : ''}
       ${m.text ? `<button class="btn plain wide" data-act="copy" data-arg="${id}">📋 نسخ النص</button>` : ''}
       ${del ? `<button class="btn plain wide danger-t" data-act="delMsg" data-arg="${room}|${id}">🗑️ حذف الرسالة</button>` : ''}
@@ -758,7 +828,7 @@
     const fr = new FileReader();
     fr.onload = () => {
       if (fr.result.length > 900000) { toast('⚠️ التسجيل طويل جداً'); return; }
-      Cloud.send(r.room, { audio: fr.result, dur: Math.min(REC_MAX, Math.round(dur)) || 1 }).done
+      Cloud.send(r.room, { audio: fr.result, dur: Math.min(REC_MAX, Math.round(dur)) || 1, reply: takeReply(r.room) }).done
         .catch(() => toast('⚠️ تعذّر إرسال التسجيل'));
       Sound.send();
     };
@@ -1035,6 +1105,7 @@
   function openRoom(r) {
     room = r;
     panel = null;
+    replyTo = null;
     Cloud.watch(r, 300);
     history.pushState({ room: r }, '');
     render();
@@ -1044,6 +1115,7 @@
     if (player) { player.audio.pause(); player = null; }
     room = null;
     panel = null;
+    replyTo = null;
     render();
   }
 
@@ -1112,7 +1184,7 @@
       grow();
     },
     sticker(s) {
-      Cloud.send(room, { sticker: s });
+      Cloud.send(room, { sticker: s, reply: takeReply(room) });
       Sound.send();
       panel = null;
       showPanel();
@@ -1121,7 +1193,7 @@
       const t = $('txt');
       const text = t.value.trim();
       if (!text) return;
-      Cloud.send(room, { text });
+      Cloud.send(room, { text, reply: takeReply(room) });
       t.value = '';
       grow();
       Sound.send();
@@ -1132,13 +1204,32 @@
     sendImg() {
       if (!pendingImg) return;
       const cap = ($('imgCap').value || '').trim();
-      const { done } = Cloud.send(pendingImg.room, { img: pendingImg.data, text: cap });
+      const { done } = Cloud.send(pendingImg.room, { img: pendingImg.data, text: cap, reply: takeReply(pendingImg.room) });
       done.catch(() => toast('⚠️ تعذّر إرسال الصورة'));
       pendingImg = null;
       closeModal();
       Sound.send();
     },
     msgMenu(id) { msgMenu(id); },
+    reply(id) {
+      if (!findMsg(room, id) || !canSend(room)) return;
+      replyTo = { room, id };
+      closeModal();
+      paintReply();
+      const t = $('txt');
+      if (t && !('ontouchstart' in window)) t.focus();
+    },
+    replyCancel() { replyTo = null; paintReply(); },
+    // الضغط على الاقتباس ينقل إلى الرسالة الأصلية
+    jumpTo(id) {
+      const el = document.querySelector(`#msgs .msg[data-id="${CSS.escape(id)}"]`);
+      if (!el) { toast('الرسالة الأصلية قديمة أو حُذفت'); return; }
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el.classList.remove('flash');
+      void el.offsetWidth;
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 1400);
+    },
     photoMenu(kind) { photoMenu(kind); },
     recStart() { recStart(); },
     recSend() { recStop(false); },
