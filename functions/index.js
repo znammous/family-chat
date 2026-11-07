@@ -44,7 +44,7 @@ function preview(m) {
 }
 
 exports.chatPush = onDocumentCreated(
-  { document: 'families/{fid}/chatRooms/{room}/messages/{msg}', region: 'me-central2', secrets: [VAPID_PRIVATE], memory: '256MiB' },
+  { document: 'families/{fid}/chatRooms/{room}/messages/{msg}', region: 'me-central1', secrets: [VAPID_PRIVATE], memory: '256MiB' },
   async event => {
     const m = event.data && event.data.data();
     if (!m || !m.from) return;
