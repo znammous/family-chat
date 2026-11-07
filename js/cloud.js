@@ -145,6 +145,7 @@ const Cloud = (() => {
 
   // الجهاز يخرج من المجلس: يبقى مرتبطاً بالألعاب إن كان مرتبطاً بها
   async function signOut() {
+    await disablePush().catch(() => {});
     if (user && user.isAnonymous && fid) {
       // يبقى ملفه في المجلس معلَّماً بالفصل، ليعيد ولي الأمر ربطه لاحقاً بنفس الهوية
       if (users[user.uid]) await fb.fs.updateDoc(famDoc('chatUsers', user.uid), { left: Date.now() }).catch(() => {});
@@ -340,12 +341,48 @@ const Cloud = (() => {
 
   const remove = (room, id) => fb.fs.deleteDoc(famDoc('chatRooms', room, 'messages', id));
 
+  // ───── تنبيهات Web Push ─────
+  // الجهاز يحفظ عنوان تنبيهاته في chatPush/{uid}.subs، ودالة chatPush في functions/ ترسل إليه
+  // تنبيهاً عند كل رسالة جديدة تخصّه، فيصل حتى لو كان التطبيق مغلقاً
+  const VAPID = 'BBER1o4mIwGYEgSDgR7xph8zP09AW3kV6ZQdSfW5KV2o3ACLfncLKoYeUjulre-ATJiMMyphZFQCdt7pcPjm2r8';
+  const PUSH_KEY = 'family-chat-push';
+  const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window;
+  const b64 = s => Uint8Array.from(atob((s + '='.repeat((4 - s.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  async function enablePush() {
+    if (!pushSupported() || !fid || !user) return false;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription())
+      || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) });
+    const j = sub.toJSON();
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(j.endpoint));
+    const key = Array.from(new Uint8Array(hash).slice(0, 8), b => b.toString(16).padStart(2, '0')).join('');
+    const old = ls.get(PUSH_KEY);
+    const entry = { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth }, at: Date.now() };
+    const subs = { [key]: entry };
+    if (old && old !== key) subs[old] = fb.fs.deleteField();
+    await fb.fs.setDoc(famDoc('chatPush', user.uid), { subs }, { merge: true });
+    ls.set(PUSH_KEY, key);
+    return true;
+  }
+  // يوقف التنبيهات على هذا الجهاز فقط (أجهزة الفرد الأخرى تبقى)
+  async function disablePush() {
+    const key = ls.get(PUSH_KEY);
+    ls.set(PUSH_KEY, null);
+    if (key && fid && user) await fb.fs.updateDoc(famDoc('chatPush', user.uid), { ['subs.' + key]: fb.fs.deleteField() }).catch(() => {});
+    if (pushSupported()) {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe().catch(() => {});
+    }
+  }
+
   const me = () => (user ? users[user.uid] : null);
 
   return {
     start, signIn, signOut, join, createCode, saveProfile, beat, removeMember, forget, setDmOff, grant, revoke,
     groups, addGroup, renameGroup, removeGroup,
     watch, msgsOf, send, react, edit, remove,
+    pushSupported, enablePush, disablePush, pushOn: () => !!ls.get(PUSH_KEY),
     on: fn => listeners.push(fn),
     status: () => status,
     uid: () => (user ? user.uid : ''),

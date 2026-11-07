@@ -1157,7 +1157,8 @@
     const m = incoming[incoming.length - 1];
     const text = `${nameOf(m.from)}: ${m.sticker ? '✨ ملصق' : m.audio ? '🎤 رسالة صوتية' : m.img ? '📷 صورة' : (m.title || m.text || '').slice(0, 80)}`;
     if (document.visibilityState === 'visible') toast(`💌 ${roomTitle(r) === nameOf(m.from) ? '' : roomTitle(r) + ' · '}${text}`);
-    else if (notifyOn() && navigator.serviceWorker) {
+    // التنبيه يصل من الخادم (Web Push) إن كان مفعّلاً، فلا نكرّره من هنا
+    else if (notifyOn() && !Cloud.pushOn() && navigator.serviceWorker) {
       navigator.serviceWorker.ready.then(reg => reg.showNotification(roomTitle(r), {
         body: text, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: r, lang: 'ar', dir: 'rtl', data: { room: r },
       })).catch(() => {});
@@ -1452,11 +1453,17 @@
     },
 
     toggleNotify() {
-      if (notifyOn()) { ls.set('family-chat-notify', false); render(); return; }
-      if (!('Notification' in window)) { toast('هذا المتصفح لا يدعم التنبيهات'); return; }
+      if (notifyOn()) { ls.set('family-chat-notify', false); Cloud.disablePush().catch(() => {}); render(); return; }
+      // على الآيفون لا تعمل التنبيهات إلا بعد تثبيت المجلس على الشاشة الرئيسية
+      if (!('Notification' in window) || !Cloud.pushSupported()) {
+        toast(/iPhone|iPad|iPod/.test(navigator.userAgent) ? '📲 ثبّت المجلس على الشاشة الرئيسية أولاً، ثم فعّل التنبيهات من داخله' : 'هذا المتصفح لا يدعم التنبيهات', 5000);
+        if (!('Notification' in window)) return;
+      }
       Notification.requestPermission().then(p => {
         ls.set('family-chat-notify', p === 'granted');
         if (p !== 'granted') toast('🔕 لم يُسمح بالتنبيهات من إعدادات المتصفح');
+        else Cloud.enablePush().then(ok => { if (ok) toast('🔔 ستصلك التنبيهات حتى والمجلس مغلق'); })
+          .catch(() => toast('⚠️ تعذّر تفعيل التنبيهات والمجلس مغلق، ستصلك وهو مفتوح فقط'));
         render();
       });
     },
@@ -1502,6 +1509,16 @@
 
   // ───── التحديثات من السحابة ─────
   let wasStatus = '';
+  let pushChecked = false;
+  let startRoom = new URLSearchParams(location.search).get('room');
+  // الضغط على تنبيه والمجلس مغلق يفتحه على ?room=المحادثة، حين تصبح المحادثة معروفة (الأفراد والمجموعات)
+  function tryStartRoom() {
+    if (!startRoom || !Cloud.me() || !allRooms().includes(startRoom)) return;
+    const r = startRoom;
+    startRoom = null;
+    history.replaceState(history.state, '', location.pathname + location.hash);
+    setTimeout(() => openRoom(r), 0);
+  }
   Cloud.on(what => {
     if (what === 'status') {
       const st = Cloud.status();
@@ -1519,6 +1536,10 @@
         if (fresh) { pairing = null; Sound.pop(); toast(`🎉 انضم ${fresh.name} إلى العائلة!`, 4000); }
       }
       if (Cloud.me()) {
+        // نجدّد عنوان التنبيهات مرة في كل فتح، فقد يغيّره المتصفح
+        if (!pushChecked && notifyOn()) { pushChecked = true; Cloud.enablePush().catch(() => {}); }
+        // الضغط على تنبيه والمجلس مغلق يفتحه على ?room=المحادثة
+        tryStartRoom();
         if (Cloud.me().look && !ls.get('family-chat-look', null)) { look = Cloud.me().look; ls.set('family-chat-look', look); }
         watchAll();
         Cloud.beat();
@@ -1529,6 +1550,7 @@
     if (what === 'config') {
       // نتابع غرف المجموعات الجديدة بعد انتهاء هذا التحديث: فتح متابعة جديدة داخله يُضيع على Firestore الكتابة المعلّقة
       if (Cloud.me()) setTimeout(watchAll, 0);
+      tryStartRoom();
       // حذف ولي الأمر المجموعة المفتوحة: نغلقها
       if (room && isGroup(room) && !groupOf(room)) { toast('🗑️ حُذفت هذه المجموعة'); history.back(); return; }
       // تغيّر إذن الرسائل الخاصة: نعيد رسم الغرفة فقط إن تغيّر ظهور خانة الكتابة

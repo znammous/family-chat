@@ -135,6 +135,15 @@ service cloud.firestore {
         allow delete: if isMember(fid) && inRoom(room) && resource.data.from == request.auth.uid;
       }
 
+      // عناوين تنبيهات الجهاز (Web Push): يكتبها صاحبها فقط، وتقرؤها دالة التنبيهات بصلاحيات الخادم
+      // subs = { مفتاح: { endpoint, keys, at } } لكل جهاز يستخدمه الفرد
+      match /chatPush/{uid} {
+        allow get, delete: if isMember(fid) && request.auth.uid == uid;
+        allow create, update: if isMember(fid) && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['subs'])
+          && request.resource.data.subs is map && request.resource.data.subs.size() <= 10;
+      }
+
       // ولي أمر آخر: جهازه يسجّل نفسه برمز أنشأه ولي الأمر لولي أمر (kid يبدأ بـ A|)، فيصبح له ما لولي الأمر.
       // يقرأ سجلّه ويحذفه، وولي الأمر يرى الجميع ويحذفهم (بالقاعدة العامة)
       match /guardians/{gid} {

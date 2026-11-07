@@ -85,7 +85,7 @@ exports.chatPush = onDocumentCreated(
           .catch(e => {
             // الجهاز ألغى التنبيهات أو انتهى عنوانه: نحذفه
             if (e.statusCode === 404 || e.statusCode === 410) dead.push(k);
-            else console.warn('push failed', e.statusCode, e.body);
+            else console.warn('push failed', e.statusCode || '', e.body || e.message);
           })));
       if (dead.length) await d.ref.update(Object.fromEntries(dead.map(k => ['subs.' + k, FieldValue.delete()])));
     }));

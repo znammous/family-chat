@@ -1,6 +1,6 @@
 // يحفظ ملفات المجلس على الجهاز ليفتح بسرعة وبدون إنترنت (الرسائل نفسها يحفظها Firestore)
 // غيّر رقم الإصدار عند تعديل أي ملف حتى يحدَّث الكاش
-const CACHE = 'family-chat-v21';
+const CACHE = 'family-chat-v22';
 const FILES = [
   './',
   'index.html',
@@ -52,6 +52,21 @@ self.addEventListener('fetch', e => {
   );
 });
 
+// تنبيه من الخادم (functions/index.js) عند رسالة جديدة، يصل حتى لو كان المجلس مغلقاً
+const IOS = /iPhone|iPad|iPod/.test(self.navigator.userAgent);
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) {}
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    // المجلس مفتوح أمام صاحبه: هو يعرض الرسالة بنفسه. (الآيفون يلغي التنبيهات إن وصل تنبيه لم يُعرض، فنعرضه دائماً هناك)
+    if (!IOS && list.some(c => c.visibilityState === 'visible')) return;
+    return self.registration.showNotification(d.title || 'مجلس العائلة', {
+      body: d.body || '💌 رسالة جديدة', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+      tag: d.room || 'chat', renotify: true, lang: 'ar', dir: 'rtl', data: { room: d.room },
+    });
+  }));
+});
+
 // الضغط على تنبيه رسالة يفتح المجلس على تلك المحادثة
 self.addEventListener('notificationclick', e => {
   e.notification.close();
@@ -59,6 +74,6 @@ self.addEventListener('notificationclick', e => {
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
     const win = list.find(c => c.url.includes(self.registration.scope));
     if (win) { win.focus(); if (room) win.postMessage({ room }); return; }
-    return self.clients.openWindow('./');
+    return self.clients.openWindow(room ? './?room=' + encodeURIComponent(room) : './');
   }));
 });
