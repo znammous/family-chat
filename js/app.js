@@ -56,6 +56,7 @@
     };
   })();
 
+  const HEROES = 'https://znammous.github.io/heroes-world/';
   const NUM = 'ar-SA-u-nu-latn-ca-gregory';
   const timeOf = at => new Date(at).toLocaleTimeString(NUM, { hour: 'numeric', minute: '2-digit' });
   function dayOf(at) {
@@ -187,6 +188,7 @@
       <button class="btn big green" data-act="signIn">👑 أنا ولي الأمر — دخول بحساب Google</button>
       <button class="btn big pink" data-act="goJoin">📱 انضم برمز QR من ولي الأمر</button>
       <p class="muted small">ولي الأمر يدخل بحسابه مرة واحدة، ثم يضيف الأبناء من «العائلة ← أضف فرداً».</p>`}
+      <a class="link-btn" href="${HEROES}">🌟 العودة إلى عالم الأبطال</a>
     </div>`;
   }
 
@@ -384,6 +386,7 @@
       <div class="setting"><span>🔔 تنبيه عند وصول رسالة</span><button class="switch ${notifyOn() ? 'on' : ''}" data-act="toggleNotify"><i></i></button></div>
       <div class="setting"><span>🔊 الأصوات</span><button class="switch ${ls.get('family-chat-muted', false) ? '' : 'on'}" data-act="toggleMute"><i></i></button></div>
       ${isParent() ? `<p class="muted small" dir="ltr">${esc(Cloud.email())}</p>` : ''}
+      <a class="btn plain wide" href="${HEROES}">🌟 عالم الأبطال: ألعاب العائلة</a>
       <button class="link-btn danger" data-act="signOut">${isParent() ? 'تسجيل الخروج من هذا الجهاز' : 'فصل هذا الجهاز عن شات العائلة'}</button></div>`;
     return h;
   }

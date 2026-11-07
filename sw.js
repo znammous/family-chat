@@ -1,6 +1,6 @@
 // يحفظ ملفات الشات على الجهاز ليفتح بسرعة وبدون إنترنت (الرسائل نفسها يحفظها Firestore)
 // غيّر رقم الإصدار عند تعديل أي ملف حتى يحدَّث الكاش
-const CACHE = 'family-chat-v1';
+const CACHE = 'family-chat-v2';
 const FILES = [
   './',
   'index.html',
