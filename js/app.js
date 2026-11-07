@@ -1196,7 +1196,7 @@
     // التنبيه يصل من الخادم (Web Push) إن كان مفعّلاً، فلا نكرّره من هنا
     else if (notifyOn() && !Cloud.pushOn() && navigator.serviceWorker) {
       navigator.serviceWorker.ready.then(reg => reg.showNotification(roomTitle(r), {
-        body: text, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: r, lang: 'ar', dir: 'rtl', data: { room: r },
+        body: text, icon: 'icons/icon-192.png', badge: 'icons/badge.png', tag: r, lang: 'ar', dir: 'rtl', data: { room: r },
       })).catch(() => {});
     }
   }
