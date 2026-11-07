@@ -26,6 +26,9 @@ const Cloud = (() => {
   let fb = null, user = null, fid = null, joining = false;
   let memberUnsub = null, usersUnsub = null, cfgUnsub = null, memberData = null;
   let config = {};   // إعدادات ولي الأمر: { dmOff, groups }
+  // ولي أمر آخر: جهاز انضم برمز «ولي أمر» (A|الاسم) فسُجّل في families/{fid}/guardians/{معرّفه}،
+  // وله ما لولي الأمر صاحب الحساب (قواعد Firestore المشتركة مع الألعاب)
+  let guardian = false, guardianUnsub = null, guardiansUnsub = null, guardians = {};
   let users = {}, usersReady = false;
   const rooms = {};   // غرفة ← { unsub, limit, msgs, ready }
   const listeners = [];
@@ -63,7 +66,9 @@ const Cloud = (() => {
     if (memberUnsub) { memberUnsub(); memberUnsub = null; }
     if (usersUnsub) { usersUnsub(); usersUnsub = null; }
     if (cfgUnsub) { cfgUnsub(); cfgUnsub = null; }
-    config = {};
+    if (guardianUnsub) { guardianUnsub(); guardianUnsub = null; }
+    if (guardiansUnsub) { guardiansUnsub(); guardiansUnsub = null; }
+    config = {}; guardian = false; guardians = {};
     Object.keys(rooms).forEach(r => { if (rooms[r].unsub) rooms[r].unsub(); delete rooms[r]; });
     users = {}; usersReady = false; memberData = null;
   }
@@ -84,7 +89,15 @@ const Cloud = (() => {
         memberData = snap.exists() ? snap.data() : null;
         if (!snap.metadata.fromCache && !memberData) leave();
       }, () => {});
-    }
+      guardianUnsub = fb.fs.onSnapshot(famDoc('guardians', u.uid), snap => {
+        const g = snap.exists();
+        if (snap.metadata.fromCache && !g) return;
+        if (g === guardian) return;
+        guardian = g;
+        watchGuardians(g);
+        notify('users');
+      }, () => {});
+    } else watchGuardians(true);
     usersUnsub = fb.fs.onSnapshot(famCol('chatUsers'), { includeMetadataChanges: true }, snap => {
       users = {};
       snap.docs.forEach(d => { users[d.id] = { id: d.id, ...d.data() }; });
@@ -97,6 +110,17 @@ const Cloud = (() => {
       notify('config');
     }, () => {});
     set('ok');
+  }
+
+  // قائمة أولياء الأمور الآخرين: يقرؤها ولي الأمر ومن له صلاحياته فقط
+  function watchGuardians(on) {
+    if (!on) { if (guardiansUnsub) { guardiansUnsub(); guardiansUnsub = null; } guardians = {}; return; }
+    if (guardiansUnsub) return;
+    guardiansUnsub = fb.fs.onSnapshot(famCol('guardians'), snap => {
+      guardians = {};
+      snap.docs.forEach(d => { guardians[d.id] = d.data().name || ''; });
+      notify('users');
+    }, () => {});
   }
 
   async function linkFromGames(u) {
@@ -124,6 +148,8 @@ const Cloud = (() => {
     if (user && user.isAnonymous && fid) {
       // يبقى ملفه في المجلس معلَّماً بالفصل، ليعيد ولي الأمر ربطه لاحقاً بنفس الهوية
       if (users[user.uid]) await fb.fs.updateDoc(famDoc('chatUsers', user.uid), { left: Date.now() }).catch(() => {});
+      // ولي الأمر الآخر يبقى ولي أمر في الألعاب إن بقي جهازه مرتبطاً بها
+      if (guardian && !otherApps(memberData)) await fb.fs.deleteDoc(famDoc('guardians', user.uid)).catch(() => {});
       const ref = famDoc('members', user.uid);
       await (otherApps(memberData)
         ? fb.fs.updateDoc(ref, { ['apps.' + APP]: fb.fs.deleteField() })
@@ -184,6 +210,12 @@ const Cloud = (() => {
         await fb.fs.setDoc(mref, { ...entry, kid: old.kid || '', apps });
       }
       await relink(c, cred.uid);
+      // رمز «ولي أمر»: يُسجَّل الجهاز وليَّ أمر له صلاحيات صاحب الحساب، ويُلغى الرمز فلا يُستعمل مرة ثانية
+      if (/^A\|/.test(c.kid || '')) {
+        await fb.fs.setDoc(fb.fs.doc(fb.db, 'families', c.fid, 'guardians', cred.uid),
+          { code, name: (c.kid.slice(2) || String(name || '')).slice(0, 40), at: Date.now() });
+        fb.fs.deleteDoc(fb.fs.doc(fb.db, 'pairCodes', code)).catch(() => {});
+      }
       ls.set(FID_KEY, c.fid);
       ls.set('family-chat-nolink', null);
       joining = false;
@@ -227,6 +259,8 @@ const Cloud = (() => {
 
   // ولي الأمر يفصل جهازاً عن العائلة كلها (المجلس والألعاب)، ويبقى ملفه معلَّماً بالفصل لإعادة ربطه لاحقاً
   async function removeMember(id) {
+    // فصل ولي أمر آخر يلغي صلاحياته في المجلس والألعاب
+    await fb.fs.deleteDoc(famDoc('guardians', id)).catch(() => {});
     await fb.fs.deleteDoc(famDoc('members', id)).catch(() => {});
     await fb.fs.updateDoc(famDoc('chatUsers', id), { left: Date.now() });
   }
@@ -235,6 +269,10 @@ const Cloud = (() => {
     const older = Object.values(users).filter(u => u.heir === id).map(u => u.id);
     await Promise.all([id, ...older].map(x => fb.fs.deleteDoc(famDoc('chatUsers', x))));
   }
+
+  // ولي الأمر يمنح فرداً صلاحياته (مثل «ماما» التي انضمت قبل هذه الميزة) أو يسحبها منه
+  const grant = (id, name) => fb.fs.setDoc(famDoc('guardians', id), { name: String(name || '').slice(0, 40), at: Date.now() });
+  const revoke = id => fb.fs.deleteDoc(famDoc('guardians', id));
 
   // ولي الأمر يوقف الرسائل الخاصة أو يعيدها
   const setDmOff = off => fb.fs.setDoc(famDoc('chatConfig', 'settings'), { dmOff: !!off }, { merge: true });
@@ -305,7 +343,7 @@ const Cloud = (() => {
   const me = () => (user ? users[user.uid] : null);
 
   return {
-    start, signIn, signOut, join, createCode, saveProfile, beat, removeMember, forget, setDmOff,
+    start, signIn, signOut, join, createCode, saveProfile, beat, removeMember, forget, setDmOff, grant, revoke,
     groups, addGroup, renameGroup, removeGroup,
     watch, msgsOf, send, react, edit, remove,
     on: fn => listeners.push(fn),
@@ -313,8 +351,12 @@ const Cloud = (() => {
     uid: () => (user ? user.uid : ''),
     fid: () => fid,
     email: () => (user && user.email) || '',
-    // 'parent' حساب Google | 'device' جهاز انضم برمز | '' غير مسجّل
-    role: () => (!fid || !user ? '' : user.isAnonymous ? 'device' : 'parent'),
+    // 'parent' حساب Google أو ولي أمر آخر | 'device' جهاز انضم برمز | '' غير مسجّل
+    role: () => (!fid || !user ? '' : user.isAnonymous && !guardian ? 'device' : 'parent'),
+    // صاحب حساب Google نفسه (لا ولي الأمر الآخر)
+    owner: () => !!(fid && user && !user.isAnonymous),
+    guardian: () => !!fid && guardian,
+    isGuardian: id => id in guardians || (id === (user && user.uid) && guardian),
     me, users: () => users,
     dmOff: () => !!config.dmOff, usersReady: () => usersReady,
     roomReady: room => !!(rooms[room] && rooms[room].ready),

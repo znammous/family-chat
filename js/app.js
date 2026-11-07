@@ -107,6 +107,8 @@
   const dmPeers = r => r.slice(3).split('_');
   const isParent = () => Cloud.role() === 'parent';
   const ROLE_BADGE = { parent: '👑 ولي الأمر', adult: '⭐ ولي أمر', kid: '' };
+  // ولي الأمر الآخر يظهر بـ 👑 لمن يعرف ذلك (أولياء الأمور)
+  const roleBadge = u => (u && u.role !== 'parent' && Cloud.isGuardian(u.id) ? '👑 ولي أمر' : ROLE_BADGE[u && u.role] || '');
   // لون ثابت لاسم كل فرد في محادثة العائلة
   const COLORS = ['#e0701a', '#1b7a45', '#cc3a76', '#3a76cf', '#8a47ad', '#13807c', '#b8500c', '#a32a5b'];
   const colorOf = id => COLORS[[...String(keyOf(id))].reduce((n, c) => n + c.charCodeAt(0), 0) % COLORS.length];
@@ -331,7 +333,7 @@
       const sorted = fam.slice().sort((a, b) => lastAt(dmWith(b.id)) - lastAt(dmWith(a.id)));
       h += `<div class="card list">${sorted.map(u => roomRow(dmWith(u.id),
         `<span class="av-wrap">${Art.avatar(u.avatar)}${online(u) ? '<i class="online"></i>' : ''}</span>`,
-        `${esc(u.name)} ${ROLE_BADGE[u.role] ? `<em class="role">${ROLE_BADGE[u.role]}</em>` : ''}`)).join('')}</div>`;
+        `${esc(u.name)} ${roleBadge(u) ? `<em class="role">${roleBadge(u)}</em>` : ''}`)).join('')}</div>`;
     }
     return h;
   }
@@ -408,17 +410,20 @@
   function familyTab() {
     const me = Cloud.me();
     const list = active();
-    let h = `<div class="card me-card">${Art.avatar(me.avatar, 'lg')}<div><b>${esc(me.name)}</b><small>${ROLE_BADGE[me.role] || '🌟 من أبطال العائلة'}</small></div>
+    let h = `<div class="card me-card">${Art.avatar(me.avatar, 'lg')}<div><b>${esc(me.name)}</b><small>${roleBadge(me) || '🌟 من أبطال العائلة'}</small></div>
       <button class="btn small blue" data-act="editProfile">✏️ تعديل</button></div>`;
     h += `<div class="card"><h3>🌍 عالمي</h3><div class="look-pick">
       <button class="look-opt ${look === 'falfoula' ? 'on' : ''}" data-act="setLook" data-arg="falfoula">${Art.char('falfoula', 'happy')}<b>عالم فلفولة</b></button>
       <button class="look-opt ${look === 'arnooba' ? 'on' : ''}" data-act="setLook" data-arg="arnooba">${Art.char('arnooba', 'happy')}<b>عالم أرنوبة</b></button></div></div>`;
     h += `<div class="card"><h3>👨‍👩‍👧‍👦 أفراد العائلة (${list.length})</h3><ul class="members">${list.map(u => `<li>
       <span class="av-wrap">${Art.avatar(u.avatar)}${online(u) ? '<i class="online"></i>' : ''}</span>
-      <span class="m-main"><b>${esc(u.name)}${u.id === uid() ? ' (أنت)' : ''}</b><small>${ROLE_BADGE[u.role] ? ROLE_BADGE[u.role] + ' · ' : ''}${u.id === uid() ? 'متصل الآن' : ago(u.seen || 0)}</small></span>
+      <span class="m-main"><b>${esc(u.name)}${u.id === uid() ? ' (أنت)' : ''}</b><small>${roleBadge(u) ? roleBadge(u) + ' · ' : ''}${u.id === uid() ? 'متصل الآن' : ago(u.seen || 0)}</small></span>
       ${u.id !== uid() && dmOpen(dmWith(u.id)) ? `<button class="btn small pink" data-act="open" data-arg="${dmWith(u.id)}">💌</button>` : ''}
       ${isParent() && u.id !== uid() ? `<button class="btn small blue" data-act="peek" data-arg="${u.id}" aria-label="محادثات ${esc(u.name)}">👀</button>` : ''}
-      ${isParent() && u.id !== uid() ? `<button class="link-btn danger small" data-act="removeMember" data-arg="${u.id}">فصل</button>` : ''}
+      ${isParent() && u.id !== uid() && u.id !== Cloud.fid() && u.role === 'adult' ? (Cloud.isGuardian(u.id)
+        ? `<button class="link-btn small" data-act="revokeGuardian" data-arg="${u.id}">سحب الصلاحيات</button>`
+        : `<button class="link-btn small" data-act="grantGuardian" data-arg="${u.id}">👑 منح صلاحيات ولي الأمر</button>`) : ''}
+      ${isParent() && u.id !== uid() && u.id !== Cloud.fid() ? `<button class="link-btn danger small" data-act="removeMember" data-arg="${u.id}">فصل</button>` : ''}
     </li>`).join('')}</ul></div>`;
     if (isParent()) h += formerBox() + addMemberBox() + groupsBox() + kidsChats();
     h += `<div class="card"><h3>⚙️ الإعدادات</h3>
@@ -428,7 +433,7 @@
       <p class="muted small" dir="ltr">${esc(Cloud.email())}</p>` : ''}
       ${installBtn('btn plain wide')}
       <a class="btn plain wide" href="${HEROES}">🌟 عالم الأبطال: ألعاب العائلة</a>
-      <button class="link-btn danger" data-act="signOut">${isParent() ? 'تسجيل الخروج من هذا الجهاز' : 'فصل هذا الجهاز عن مجلس العائلة'}</button></div>`;
+      <button class="link-btn danger" data-act="signOut">${Cloud.owner() ? 'تسجيل الخروج من هذا الجهاز' : 'فصل هذا الجهاز عن مجلس العائلة'}</button></div>`;
     return h;
   }
 
@@ -460,7 +465,7 @@
       <p class="muted small">أعد ربط أحدهم برمز QR فيرجع على جهازه بنفس اسمه وصورته ورسائله ومحادثاته.</p>
       <ul class="members">${list.map(u => `<li>
       <span class="av-wrap">${Art.avatar(u.avatar)}</span>
-      <span class="m-main"><b>${esc(u.name)}</b><small>${ROLE_BADGE[u.role] ? ROLE_BADGE[u.role] + ' · ' : ''}فُصل ${dayOf(u.left)}</small></span>
+      <span class="m-main"><b>${esc(u.name)}</b><small>${roleBadge(u) ? roleBadge(u) + ' · ' : ''}فُصل ${dayOf(u.left)}</small></span>
       <button class="btn small green" data-act="relink" data-arg="${u.id}">🔁 إعادة ربط</button>
       <button class="link-btn danger small" data-act="forget" data-arg="${u.id}">حذف</button>
     </li>`).join('')}</ul></div>`;
@@ -485,8 +490,9 @@
       <input id="pairName" class="text-in" maxlength="30" placeholder="اسمه (مثال: سارة)">
       <div class="chips" id="pairRole">
         <button class="chip on" data-act="pairRole" data-arg="K">🧒 ابن أو بنت</button>
-        <button class="chip" data-act="pairRole" data-arg="A">⭐ ولي أمر آخر</button>
+        <button class="chip" data-act="pairRole" data-arg="A">👑 ولي أمر آخر</button>
       </div>
+      <p class="muted small">ولي الأمر الآخر يأخذ صلاحياتك كلها: يرى المحادثات الخاصة ويضيف الأفراد ويفصلهم، هنا وفي الألعاب. رمزه لمرة واحدة.</p>
       <button class="btn green wide" data-act="pair">📱 أنشئ رمز QR</button></div>`;
   }
 
@@ -509,7 +515,7 @@
       .sort((a, b) => lastAt(b.r) - lastAt(a.r));
     const rows = rooms.map(({ o, r }) => roomRow(r,
       `<span class="av-wrap">${Art.avatar(o.avatar)}${online(o) ? '<i class="online"></i>' : ''}</span>`,
-      `${esc(o.id === uid() ? 'أنت' : o.name)} ${ROLE_BADGE[o.role] ? `<em class="role">${ROLE_BADGE[o.role]}</em>` : ''}`)).join('');
+      `${esc(o.id === uid() ? 'أنت' : o.name)} ${roleBadge(o) ? `<em class="role">${roleBadge(o)}</em>` : ''}`)).join('');
     app.innerHTML = `<div class="page home">
       <header class="room-top">
         <button class="back" data-act="close" aria-label="رجوع"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M13 5l7 7-7 7"/></svg></button>
@@ -1202,7 +1208,7 @@
       const name = $('nameIn').value.trim();
       if (!name) { toast('✏️ اكتب اسمك أولاً'); $('nameIn').focus(); return; }
       const mine = Cloud.me();
-      const role = isParent() ? 'parent' : mine ? mine.role : (showSetup.role || 'kid');
+      const role = Cloud.owner() ? 'parent' : mine ? mine.role : (showSetup.role || 'kid');
       look = setupLook || look;
       ls.set('family-chat-look', look);
       Cloud.saveProfile({ name, avatar: setupAvatar, role, look }).catch(() => toast('⚠️ تعذّر الحفظ، تأكد من الإنترنت'));
@@ -1410,6 +1416,15 @@
       if (!g || !confirm(`حذف مجموعة «${g.name}»؟ ستُحذف رسائلها كلها ولا يمكن استرجاعها.`)) return;
       Cloud.removeGroup(id).then(() => toast('🗑️ حُذفت المجموعة')).catch(() => toast('⚠️ تعذّر حذف المجموعة'));
     },
+    grantGuardian(id) {
+      const u = userOf(id);
+      if (!u || !confirm(`منح ${u.name} صلاحيات ولي الأمر؟ سيرى المحادثات الخاصة ويدير العائلة مثلك، في المجلس والألعاب.`)) return;
+      Cloud.grant(id, u.name).then(() => toast(`👑 صار ${u.name} ولي أمر`)).catch(() => toast('⚠️ تعذّر منح الصلاحيات'));
+    },
+    revokeGuardian(id) {
+      if (!confirm(`سحب صلاحيات ولي الأمر من ${nameOf(id)}؟ يبقى فرداً في العائلة.`)) return;
+      Cloud.revoke(id).then(() => toast('تم سحب الصلاحيات')).catch(() => toast('⚠️ تعذّر سحب الصلاحيات'));
+    },
     removeMember(id) {
       if (!confirm(`فصل ${nameOf(id)} عن العائلة؟ سيُفصل جهازه عن المجلس وعن ألعاب العائلة أيضاً، وتبقى رسائله.`)) return;
       Cloud.removeMember(id).then(() => toast('تم الفصل')).catch(() => toast('⚠️ تعذّر الفصل'));
@@ -1426,7 +1441,7 @@
     },
     toggleMute() { ls.set('family-chat-muted', !ls.get('family-chat-muted', false)); render(); },
     signOut() {
-      const msg = isParent() ? 'تسجيل الخروج من هذا الجهاز؟' : 'فصل هذا الجهاز عن مجلس العائلة؟ ستحتاج رمزاً جديداً من ولي الأمر للعودة.';
+      const msg = Cloud.owner() ? 'تسجيل الخروج من هذا الجهاز؟' : 'فصل هذا الجهاز عن مجلس العائلة؟ ستحتاج رمزاً جديداً من ولي الأمر للعودة.';
       if (!confirm(msg)) return;
       room = null;
       peek = null;
