@@ -44,11 +44,12 @@ const Cloud = (() => {
         import(SDK + 'firebase-firestore.js'),
       ]);
       const a = app.initializeApp(FIREBASE);
-      fb = { auth, fs, authI: auth.getAuth(a), db: fs.initializeFirestore(a, { localCache: fs.persistentLocalCache() }) };
+      fb = { app: a, auth, fs, authI: auth.getAuth(a), db: fs.initializeFirestore(a, { localCache: fs.persistentLocalCache() }) };
       // للتجربة فقط: localhost/?emulator يستخدم محاكيات Firebase بدل المشروع الحقيقي
       if (location.hostname === 'localhost' && /[?&]emulator\b/.test(location.search)) {
         auth.connectAuthEmulator(fb.authI, 'http://localhost:9099', { disableWarnings: true });
         fs.connectFirestoreEmulator(fb.db, 'localhost', 8085);
+        fb.emulator = true;
         window.__fb = fb;   // لاختبارات المحاكي فقط
       }
     } catch (e) {
@@ -328,6 +329,9 @@ const Cloud = (() => {
     // نعيد المعرّف فوراً؛ Firestore يرفع الرسالة عند عودة الاتصال إن كان الجهاز بلا إنترنت
     const ref = fb.fs.doc(famCol('chatRooms', room, 'messages'));
     const done = fb.fs.setDoc(ref, data);
+    // بعد أن تصل الرسالة إلى الخادم نطلب إرسال تنبيهها لأجهزة العائلة
+    const f = fid;
+    done.then(() => pushFor(f, room, ref.id)).catch(() => {});
     return { id: ref.id, done };
   }
 
@@ -363,6 +367,17 @@ const Cloud = (() => {
     await fb.fs.setDoc(famDoc('chatPush', user.uid), { subs }, { merge: true });
     ls.set(PUSH_KEY, key);
     return true;
+  }
+  // دالة chatPush (functions/index.js) ترسل تنبيه الرسالة لمن تخصّه
+  let callPush = null;
+  async function pushFor(f, room, msg) {
+    if (!callPush) {
+      const fn = await import(SDK + 'firebase-functions.js');
+      const fns = fn.getFunctions(fb.app, 'me-central1');
+      if (fb.emulator) fn.connectFunctionsEmulator(fns, 'localhost', 5001);
+      callPush = fn.httpsCallable(fns, 'chatPush');
+    }
+    return callPush({ fid: f, room, msg });
   }
   // يوقف التنبيهات على هذا الجهاز فقط (أجهزة الفرد الأخرى تبقى)
   async function disablePush() {

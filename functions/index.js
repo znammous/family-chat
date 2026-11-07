@@ -1,7 +1,8 @@
-// تنبيهات مجلس العائلة: عند كل رسالة جديدة نرسل تنبيه Web Push إلى أجهزة من تخصّهم الرسالة،
-// فيصلهم التنبيه حتى لو كان التطبيق مغلقاً.
+// تنبيهات مجلس العائلة: بعد أن يرفع الجهاز رسالته يطلب chatPush، فنرسل تنبيه Web Push إلى أجهزة
+// من تخصّهم الرسالة، فيصلهم التنبيه حتى لو كان التطبيق مغلقاً.
+// (لا نستخدم مشغّل Firestore لأن قاعدة البيانات في me-central2 ولا تسمح Google بإنشاء المشغّلات هناك)
 // عناوين التنبيهات يحفظها كل جهاز في families/{fid}/chatPush/{uid}.subs = { مفتاح: { endpoint, keys, at } }
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -43,13 +44,24 @@ function preview(m) {
   return String(m.title || m.text || '').slice(0, 80);
 }
 
-exports.chatPush = onDocumentCreated(
-  { document: 'families/{fid}/chatRooms/{room}/messages/{msg}', region: 'me-central1', secrets: [VAPID_PRIVATE], memory: '256MiB' },
-  async event => {
-    const m = event.data && event.data.data();
-    if (!m || !m.from) return;
-    const { fid, room } = event.params;
+const ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+exports.chatPush = onCall(
+  { region: 'me-central1', secrets: [VAPID_PRIVATE], memory: '256MiB' },
+  async req => {
+    const uid = req.auth && req.auth.uid;
+    const { fid, room, msg } = req.data || {};
+    if (!uid) throw new HttpsError('unauthenticated', 'sign in');
+    if (![fid, room, msg].every(x => typeof x === 'string' && ID.test(x))) throw new HttpsError('invalid-argument', 'bad ids');
     const fam = db.collection('families').doc(fid);
+    const snap = await fam.collection('chatRooms').doc(room).collection('messages').doc(msg).get();
+    const m = snap.exists ? snap.data() : null;
+    // لا يطلب التنبيه إلا صاحب الرسالة، ولرسالة حديثة، ومرة واحدة فقط
+    if (!m || m.from !== uid) throw new HttpsError('permission-denied', 'not your message');
+    if (Date.now() - m.at > 15 * 60 * 1000) return { sent: 0 };
+    try {
+      await fam.collection('chatPushSent').doc(`${room}~${msg}`).create({ at: Date.now() });
+    } catch (e) { return { sent: 0 }; }
 
     let title;
     if (room === 'family') title = '🏡 بيت العائلة';
@@ -57,16 +69,16 @@ exports.chatPush = onDocumentCreated(
     else if (room.startsWith('g_')) {
       const cfg = await fam.collection('chatConfig').doc('settings').get();
       const g = cfg.exists && (cfg.data().groups || {})[room];
-      if (!g) return;
+      if (!g) return { sent: 0 };
       title = `${g.icon || '💬'} ${g.name || ''}`;
-    } else if (!room.startsWith('dm_')) return;
+    } else if (!room.startsWith('dm_')) return { sent: 0 };
 
     const usersSnap = await fam.collection('chatUsers').get();
     const users = {};
     usersSnap.docs.forEach(d => { users[d.id] = { id: d.id, ...d.data() }; });
     const p = people(users);
     const to = recipients(room, m.from, p);
-    if (!to.length) return;
+    if (!to.length) return { sent: 0 };
 
     const name = p.nameOf(m.from);
     const payload = JSON.stringify({
@@ -77,11 +89,13 @@ exports.chatPush = onDocumentCreated(
 
     webpush.setVapidDetails('https://znammous.github.io/family-chat/', VAPID_PUBLIC, VAPID_PRIVATE.value());
     const docs = await db.getAll(...to.map(u => fam.collection('chatPush').doc(u.id)));
+    let sent = 0;
     await Promise.all(docs.filter(d => d.exists).map(async d => {
       const subs = d.data().subs || {};
       const dead = [];
       await Promise.all(Object.entries(subs).map(([k, s]) =>
         webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload, { TTL: 24 * 3600, urgency: 'high', topic: room.slice(0, 32).replace(/[^A-Za-z0-9_-]/g, '') })
+          .then(() => { sent++; })
           .catch(e => {
             // الجهاز ألغى التنبيهات أو انتهى عنوانه: نحذفه
             if (e.statusCode === 404 || e.statusCode === 410) dead.push(k);
@@ -89,4 +103,5 @@ exports.chatPush = onDocumentCreated(
           })));
       if (dead.length) await d.ref.update(Object.fromEntries(dead.map(k => ['subs.' + k, FieldValue.delete()])));
     }));
+    return { sent };
   });
