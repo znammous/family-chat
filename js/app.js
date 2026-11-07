@@ -1310,12 +1310,16 @@
       const pos = s + e.length;
       t.setSelectionRange(pos, pos);
       grow();
+      Sound.tap();
     },
     sticker(s) {
       Cloud.send(room, { sticker: s, reply: takeReply(room) });
       Sound.send();
       panel = null;
       showPanel();
+      // إن كانت لوحة المفاتيح مفتوحة تبقى كما هي ليكمل الكتابة
+      const t = $('txt');
+      if (t && document.activeElement === t) t.focus();
     },
     sendText() {
       const t = $('txt');
@@ -1520,6 +1524,12 @@
     if (el.dataset.act === 'closeModal' && el.classList.contains('viewer') && e.target.closest('a')) return;
     const fn = actions[el.dataset.act];
     if (fn) { e.preventDefault(); e.stopPropagation(); fn(el.dataset.arg); }
+  });
+  // أزرار الإيموجي والملصقات والإرسال لا تأخذ التركيز من خانة الكتابة، فتبقى لوحة مفاتيح الجوال مفتوحة
+  // والإيموجي يُكتب في مكان المؤشر داخل النص حتى يُرسل
+  document.addEventListener('mousedown', e => {
+    if (document.activeElement && document.activeElement.id === 'txt'
+      && e.target.closest('#panel button, .composer [data-act="panel"], .composer .txt-send')) e.preventDefault();
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.id === 'codeIn') actions.joinTyped();
