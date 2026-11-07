@@ -13,6 +13,7 @@
   let room = null;          // الغرفة المفتوحة
   let peek = null;          // ولي الأمر يشاهد محادثات هذا الفرد
   let panel = null;         // emoji | sticker
+  let stick = true;         // هل نُبقي المحادثة ملتصقة بآخر رسالة
   let panelTab = 'emoji';   // آخر تبويب فُتح في لوحة الإيموجي والملصقات
   let pairing = null;       // رمز إضافة فرد: { code, exp, ready, name, role }
   let joinCode = '';
@@ -573,6 +574,7 @@
         <button class="send" data-act="recSend" aria-label="إرسال التسجيل"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 4.5 3.6 11.2c-.8.3-.8 1.4 0 1.7L21 19.5c.6.2 1.1-.4.9-1L19.3 12l2.6-6.5c.2-.6-.3-1.2-.9-1z"/></svg></button>
       </footer>` : ''}
     </div>`;
+    keepBottom($('msgs'));
     refreshRoom(true);
     paintReply();
     if (canSend(r)) swipeToReply($('msgs'));
@@ -588,10 +590,27 @@
   }
   function grow() { const t = $('txt'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }
 
+  // يُبقي المحادثة عند آخر رسالة حتى بعد أن تكتمل الصور ويتغيّر حجم الشاشة،
+  // ما لم يصعد المستخدم بنفسه ليقرأ رسائل قديمة
+  const toBottom = () => { const b = $('msgs'); if (b) b.scrollTop = b.scrollHeight; };
+  function keepBottom(box) {
+    if (!box) return;
+    stick = true;
+    let touchAt = 0;
+    const mark = () => { touchAt = Date.now(); };
+    ['wheel', 'touchstart', 'touchmove', 'pointerdown', 'keydown'].forEach(ev => box.addEventListener(ev, mark, { passive: true }));
+    box.addEventListener('scroll', () => {
+      if (Date.now() - touchAt < 1500) stick = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    }, { passive: true });
+    box.addEventListener('load', () => { if (stick) toBottom(); }, true);
+    if (window.ResizeObserver) new ResizeObserver(() => { if (stick) toBottom(); }).observe(box);
+  }
+
   function refreshRoom(first) {
     const box = $('msgs');
     if (!box) return;
-    const near = first || box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    const near = first || stick || box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    if (near) stick = true;
     const msgs = Cloud.msgsOf(room);
     const group = room === 'family' || isGroup(room) || !dmPeers(room).includes(myKey());
     let h = '', lastDay = '', lastFrom = '';
@@ -624,7 +643,7 @@
     });
     box.innerHTML = h;
     paintVoice();
-    if (near) box.scrollTop = box.scrollHeight;
+    if (near) { toBottom(); requestAnimationFrame(() => { if (stick) toBottom(); }); setTimeout(() => { if (stick) toBottom(); }, 300); }
     markRead(room);
     badge();
   }
@@ -715,8 +734,8 @@
       p.innerHTML = tabs + `<p class="panel-h">ملصقات فلفولة وأرنوبة — اضغط لإرسال</p><div class="sticker-grid">${Art.STICKERS.map(s =>
         `<button data-act="sticker" data-arg="${s}">${Art.sticker(s)}</button>`).join('')}</div>`;
     }
-    const box = $('msgs');
-    if (box) box.scrollTop = box.scrollHeight;
+    stick = true;
+    toBottom();
   }
 
   // ───── النوافذ ─────
@@ -1268,8 +1287,8 @@
       grow();
       Sound.send();
       if (panel) { panel = null; showPanel(); }
-      const box = $('msgs');
-      if (box) box.scrollTop = box.scrollHeight;
+      stick = true;
+      toBottom();
     },
     sendImg() {
       if (!pendingImg) return;
