@@ -24,7 +24,8 @@ const Cloud = (() => {
   // 'loading' | 'unavailable' | 'out' | 'linking' | 'ok' | 'offline'
   let status = 'loading';
   let fb = null, user = null, fid = null, joining = false;
-  let memberUnsub = null, usersUnsub = null, memberData = null;
+  let memberUnsub = null, usersUnsub = null, cfgUnsub = null, memberData = null;
+  let config = {};   // إعدادات ولي الأمر: { dmOff }
   let users = {}, usersReady = false;
   const rooms = {};   // غرفة ← { unsub, limit, msgs, ready }
   const listeners = [];
@@ -61,6 +62,8 @@ const Cloud = (() => {
   function stopAll() {
     if (memberUnsub) { memberUnsub(); memberUnsub = null; }
     if (usersUnsub) { usersUnsub(); usersUnsub = null; }
+    if (cfgUnsub) { cfgUnsub(); cfgUnsub = null; }
+    config = {};
     Object.keys(rooms).forEach(r => { if (rooms[r].unsub) rooms[r].unsub(); delete rooms[r]; });
     users = {}; usersReady = false; memberData = null;
   }
@@ -89,6 +92,10 @@ const Cloud = (() => {
       status = snap.metadata.fromCache ? 'offline' : 'ok';
       notify('users');
     }, () => set('offline'));
+    cfgUnsub = fb.fs.onSnapshot(famDoc('chatConfig', 'settings'), snap => {
+      config = snap.exists() ? snap.data() : {};
+      notify('config');
+    }, () => {});
     set('ok');
   }
 
@@ -200,6 +207,9 @@ const Cloud = (() => {
     await fb.fs.deleteDoc(famDoc('chatUsers', id));
   }
 
+  // ولي الأمر يوقف الرسائل الخاصة أو يعيدها
+  const setDmOff = off => fb.fs.setDoc(famDoc('chatConfig', 'settings'), { dmOff: !!off }, { merge: true });
+
   // ───── الغرف والرسائل ─────
   // كل غرفة تُتابَع بآخر limit رسالة؛ الغرفة المفتوحة تُتابَع بعدد أكبر
   function watch(room, limit = 40) {
@@ -241,7 +251,7 @@ const Cloud = (() => {
   const me = () => (user ? users[user.uid] : null);
 
   return {
-    start, signIn, signOut, join, createCode, saveProfile, beat, removeMember,
+    start, signIn, signOut, join, createCode, saveProfile, beat, removeMember, setDmOff,
     watch, msgsOf, send, react, edit, remove,
     on: fn => listeners.push(fn),
     status: () => status,
@@ -250,7 +260,8 @@ const Cloud = (() => {
     email: () => (user && user.email) || '',
     // 'parent' حساب Google | 'device' جهاز انضم برمز | '' غير مسجّل
     role: () => (!fid || !user ? '' : user.isAnonymous ? 'device' : 'parent'),
-    me, users: () => users, usersReady: () => usersReady,
+    me, users: () => users,
+    dmOff: () => !!config.dmOff, usersReady: () => usersReady,
     roomReady: room => !!(rooms[room] && rooms[room].ready),
     linkedVia: () => (memberData && memberData.apps ? Object.keys(memberData.apps) : []),
     noAutoLink: () => ls.get('family-chat-nolink') === '1',

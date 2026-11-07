@@ -78,9 +78,19 @@ service cloud.firestore {
           && (!('dur' in d) || (d.dur is number && d.dur > 0 && d.dur <= 61))
           && (!('reacts' in d) || (d.reacts is map && d.reacts.size() == 0));
       }
+      // إعدادات المجلس: يكتبها ولي الأمر (بالقاعدة العامة)، ويقرؤها كل أفراد العائلة
+      match /chatConfig/{doc} {
+        allow read: if isMember(fid);
+      }
+      // ولي الأمر يستطيع إيقاف الرسائل الخاصة؛ تبقى المحادثة الخاصة مع ولي الأمر نفسه متاحة
+      function dmAllowed(room) {
+        return !room.matches('dm_.*') || fid in room.split('_')
+          || !exists(/databases/$(database)/documents/families/$(fid)/chatConfig/settings)
+          || get(/databases/$(database)/documents/families/$(fid)/chatConfig/settings).data.get('dmOff', false) != true;
+      }
       match /chatRooms/{room}/messages/{msg} {
         allow read: if isMember(fid) && inRoom(room);
-        allow create: if isMember(fid) && inRoom(room) && validMsg();
+        allow create: if isMember(fid) && inRoom(room) && dmAllowed(room) && validMsg();
         // التفاعل بإيموجي: كل فرد يغيّر تفاعله هو فقط
         allow update: if isMember(fid) && inRoom(room)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reacts'])

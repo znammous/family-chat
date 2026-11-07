@@ -342,3 +342,6 @@ html[data-look="arnooba"] .modal-bg { background: rgba(120, 60, 110, .45); }
 .rec-time { font-size: 20px; color: var(--deep); min-width: 48px; }
 .rec-hint { flex: 1; color: var(--muted); font-weight: 700; font-size: 14px; }
 @keyframes blink { 50% { opacity: .2; } }
+
+/* ───── إعدادات ولي الأمر ───── */
+.setting > span small { display: block; font-weight: 600; font-size: 12px; }

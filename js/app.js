@@ -11,6 +11,7 @@
   let view = 'auto';        // auto | join | setup
   let tab = ls.get('family-chat-tab', 'chats');
   let room = null;          // الغرفة المفتوحة
+  let peek = null;          // ولي الأمر يشاهد محادثات هذا الفرد
   let panel = null;         // emoji | sticker
   let pairing = null;       // رمز إضافة فرد: { code, exp, ready, name, role }
   let joinCode = '';
@@ -106,6 +107,9 @@
     return nameOf(peers.find(p => p !== uid()) || uid());
   }
   const canWrite = r => r === 'family' || r === 'news' || dmPeers(r).includes(uid());
+  // الرسائل الخاصة يوقفها ولي الأمر، وتبقى المحادثة معه هو متاحة
+  const dmOpen = r => !r.startsWith('dm_') || isParent() || !Cloud.dmOff() || dmPeers(r).includes(Cloud.fid());
+  const canSend = r => canWrite(r) && dmOpen(r);
 
   // كل الغرف التي نتابعها: العائلة والأخبار ومحادثاتي الخاصة، وولي الأمر يرى محادثات الأبناء أيضاً
   function allRooms() {
@@ -155,6 +159,7 @@
     if (!Cloud.usersReady()) return showLoading('نجهّز بيت العائلة…');
     if (!Cloud.me() || view === 'setup') return showSetup();
     if (room) return showRoom();
+    if (peek && isParent() && userOf(peek)) return showPeek();
     return showHome();
   }
 
@@ -286,12 +291,16 @@
   }
 
   function chatsTab() {
-    const fam = others();
+    const fam = others().filter(u => dmOpen(dmId(uid(), u.id)));
+    const dmNote = !isParent() && Cloud.dmOff()
+      ? '<div class="card empty"><p>🔒 أوقف ولي الأمر الرسائل الخاصة حالياً، ويمكنك مراسلته هو.</p><p class="muted small">تكلّم مع الجميع في «بيت العائلة» 🏡</p></div>' : '';
     const famIcon = `<span class="av family-av">🏡</span>`;
     let h = `<div class="falfoula-talk">${Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'happy', 'talk')}<p>${greeting()}</p></div>`;
     h += `<div class="card list">${roomRow('family', famIcon, '🏡 بيت العائلة')}</div>`;
-    h += '<h3 class="section">💌 رسائل خاصة</h3>';
-    if (!fam.length) {
+    h += '<h3 class="section">💌 رسائل خاصة</h3>' + dmNote;
+    if (!fam.length && dmNote) {
+      // لا شيء آخر نعرضه
+    } else if (!fam.length) {
       h += `<div class="card empty"><p>لا يوجد أفراد آخرون بعد.</p>${isParent() ? '<button class="btn pink" data-act="tab" data-arg="family">➕ أضف أفراد العائلة</button>' : '<p class="muted small">اطلب من ولي الأمر أن يضيف إخوتك.</p>'}</div>`;
     } else {
       const sorted = fam.slice().sort((a, b) => lastAt(dmId(uid(), b.id)) - lastAt(dmId(uid(), a.id)));
@@ -379,14 +388,16 @@
     h += `<div class="card"><h3>👨‍👩‍👧‍👦 أفراد العائلة (${list.length})</h3><ul class="members">${list.map(u => `<li>
       <span class="av-wrap">${Art.avatar(u.avatar)}${online(u) ? '<i class="online"></i>' : ''}</span>
       <span class="m-main"><b>${esc(u.name)}${u.id === uid() ? ' (أنت)' : ''}</b><small>${ROLE_BADGE[u.role] ? ROLE_BADGE[u.role] + ' · ' : ''}${u.id === uid() ? 'متصل الآن' : ago(u.seen || 0)}</small></span>
-      ${u.id !== uid() ? `<button class="btn small pink" data-act="open" data-arg="${dmId(uid(), u.id)}">💌</button>` : ''}
+      ${u.id !== uid() && dmOpen(dmId(uid(), u.id)) ? `<button class="btn small pink" data-act="open" data-arg="${dmId(uid(), u.id)}">💌</button>` : ''}
+      ${isParent() && u.id !== uid() ? `<button class="btn small blue" data-act="peek" data-arg="${u.id}" aria-label="محادثات ${esc(u.name)}">👀</button>` : ''}
       ${isParent() && u.id !== uid() ? `<button class="link-btn danger small" data-act="removeMember" data-arg="${u.id}">فصل</button>` : ''}
     </li>`).join('')}</ul></div>`;
     if (isParent()) h += addMemberBox() + kidsChats();
     h += `<div class="card"><h3>⚙️ الإعدادات</h3>
       <div class="setting"><span>🔔 تنبيه عند وصول رسالة</span><button class="switch ${notifyOn() ? 'on' : ''}" data-act="toggleNotify"><i></i></button></div>
       <div class="setting"><span>🔊 الأصوات</span><button class="switch ${ls.get('family-chat-muted', false) ? '' : 'on'}" data-act="toggleMute"><i></i></button></div>
-      ${isParent() ? `<p class="muted small" dir="ltr">${esc(Cloud.email())}</p>` : ''}
+      ${isParent() ? `<div class="setting"><span>💌 الرسائل الخاصة بين الأفراد<small class="muted">${Cloud.dmOff() ? 'متوقفة: يراسلونك أنت فقط' : 'مسموحة للجميع'}</small></span><button class="switch ${Cloud.dmOff() ? '' : 'on'}" data-act="toggleDm"><i></i></button></div>
+      <p class="muted small" dir="ltr">${esc(Cloud.email())}</p>` : ''}
       <a class="btn plain wide" href="${HEROES}">🌟 عالم الأبطال: ألعاب العائلة</a>
       <button class="link-btn danger" data-act="signOut">${isParent() ? 'تسجيل الخروج من هذا الجهاز' : 'فصل هذا الجهاز عن مجلس العائلة'}</button></div>`;
     return h;
@@ -426,6 +437,30 @@
     }).join('')}</div></div>`;
   }
 
+  // ولي الأمر يدخل إلى دردشات فرد ويرى كل محادثاته الخاصة كما يراها هو
+  function showPeek() {
+    const u = userOf(peek);
+    const rooms = others().concat(isParent() ? [Cloud.me()] : []).filter(o => o && o.id !== peek)
+      .map(o => ({ o, r: dmId(peek, o.id) }))
+      .filter(x => Cloud.msgsOf(x.r).length)
+      .sort((a, b) => lastAt(b.r) - lastAt(a.r));
+    const rows = rooms.map(({ o, r }) => roomRow(r,
+      `<span class="av-wrap">${Art.avatar(o.avatar)}${online(o) ? '<i class="online"></i>' : ''}</span>`,
+      `${esc(o.id === uid() ? 'أنت' : o.name)} ${ROLE_BADGE[o.role] ? `<em class="role">${ROLE_BADGE[o.role]}</em>` : ''}`)).join('');
+    app.innerHTML = `<div class="page home">
+      <header class="room-top">
+        <button class="back" data-act="close" aria-label="رجوع">→</button>
+        <span class="av-wrap">${Art.avatar(u.avatar)}${online(u) ? '<i class="online"></i>' : ''}</span>
+        <span class="rt-main"><b>دردشات ${esc(u.name)}</b><small>👀 تشاهد محادثاته الخاصة للاطلاع فقط</small></span>
+      </header>
+      <div class="tab-body">
+        <div class="card list">${roomRow('family', '<span class="av family-av">🏡</span>', '🏡 بيت العائلة')}</div>
+        <h3 class="section">💌 محادثات ${esc(u.name)} الخاصة</h3>
+        ${rows ? `<div class="card list">${rows}</div>` : `<div class="card empty"><p>لم يراسل ${esc(u.name)} أحداً على الخاص بعد.</p></div>`}
+      </div>
+    </div>`;
+  }
+
   // ───── غرفة المحادثة ─────
   function showRoom() {
     const r = room;
@@ -439,7 +474,8 @@
       const peers = dmPeers(r);
       const other = userOf(peers.find(p => p !== uid())) || userOf(peers[0]);
       icon = `<span class="av-wrap">${Art.avatar(other ? other.avatar : '🙂')}${online(other) ? '<i class="online"></i>' : ''}</span>`;
-      sub = canWrite(r) ? (other ? ago(other.seen || 0) : '') : '👀 أنت تطّلع على هذه المحادثة فقط';
+      sub = !canWrite(r) ? '👀 أنت تطّلع على هذه المحادثة فقط'
+        : !canSend(r) ? '🔒 أوقف ولي الأمر الرسائل الخاصة' : (other ? ago(other.seen || 0) : '');
     }
     app.innerHTML = `<div class="room">
       <header class="room-top">
@@ -448,7 +484,7 @@
         <span class="rt-main"><b>${esc(roomTitle(r))}</b><small id="roomSub">${sub}</small></span>
       </header>
       <div class="msgs" id="msgs"></div>
-      ${canWrite(r) ? `<div class="panel" id="panel" hidden></div>
+      ${canSend(r) ? `<div class="panel" id="panel" hidden></div>
       <footer class="composer">
         <button class="ic" data-act="panel" data-arg="sticker" aria-label="ملصقات">${Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'cheer', 'mini')}</button>
         <button class="ic" data-act="panel" data-arg="emoji" aria-label="إيموجي">😊</button>
@@ -1019,6 +1055,12 @@
     tab(t) { tab = t; ls.set('family-chat-tab', t); render(); window.scrollTo(0, 0); },
     open(r) { openRoom(r); },
     close() { history.back(); },
+    peek(id) { peek = id; history.pushState({ peek: id }, ''); render(); window.scrollTo(0, 0); },
+    toggleDm() {
+      const off = !Cloud.dmOff();
+      if (off && !confirm('إيقاف الرسائل الخاصة بين أفراد العائلة؟ يبقى «بيت العائلة» والأخبار، ويستطيعون مراسلتك أنت على الخاص.')) return;
+      Cloud.setDmOff(off).then(() => toast(off ? '🔒 أُوقفت الرسائل الخاصة' : '💌 عادت الرسائل الخاصة')).catch(() => toast('⚠️ تعذّر الحفظ، تأكد من الإنترنت'));
+    },
 
     setLook(l) { look = l; ls.set('family-chat-look', l); const me = Cloud.me(); Cloud.saveProfile({ ...me, look: l }).catch(() => {}); render(); },
 
@@ -1165,6 +1207,7 @@
       const msg = isParent() ? 'تسجيل الخروج من هذا الجهاز؟' : 'فصل هذا الجهاز عن مجلس العائلة؟ ستحتاج رمزاً جديداً من ولي الأمر للعودة.';
       if (!confirm(msg)) return;
       room = null;
+      peek = null;
       Cloud.signOut();
     },
   };
@@ -1185,6 +1228,7 @@
   window.addEventListener('popstate', () => {
     if (!$('modal').hidden) { closeModal(); if (room) history.pushState({ room }, ''); return; }
     if (room) closeRoom();
+    else if (peek) { peek = null; render(); }
   });
 
   // رابط QR مسحته كاميرا الجهاز مباشرة: نفتح شاشة الانضمام والرمز مكتوب فيها
@@ -1206,7 +1250,7 @@
       // وصل الاتصال ورمز الانضمام من الرابط ما زال ينتظر
       if (joinCode && view === 'join' && st === 'out' && wasStatus !== 'out') joinWith(joinCode);
       wasStatus = st;
-      if (!Cloud.role()) { room = null; pairing = null; }
+      if (!Cloud.role()) { room = null; pairing = null; peek = null; }
       render();
       return;
     }
@@ -1222,6 +1266,12 @@
         Cloud.beat();
       }
       if (room && $('msgs')) refreshRoom(); else refresh();
+      return;
+    }
+    if (what === 'config') {
+      // تغيّر إذن الرسائل الخاصة: نعيد رسم الغرفة فقط إن تغيّر ظهور خانة الكتابة
+      if (room && $('msgs')) { if (!!$('txt') !== canSend(room)) render(); }
+      else refresh();
       return;
     }
     if (what && what.room) {
