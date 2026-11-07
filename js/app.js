@@ -953,6 +953,42 @@
     inp.value = '';
   });
 
+  // لصق صورة أو سحبها وإفلاتها: في المحادثة المفتوحة، أو في نافذة الخبر
+  function imageIn(dt) {
+    if (!dt) return null;
+    const f = [...(dt.files || [])].find(x => /^image\//.test(x.type));
+    if (f) return f;
+    const it = [...(dt.items || [])].find(x => x.kind === 'file' && /^image\//.test(x.type));
+    return it ? it.getAsFile() : null;
+  }
+  function pasteKind() {
+    const m = $('modal');
+    if (m && !m.hidden) return m.querySelector('[data-pick="news"], [data-act="newsNoImg"]') ? 'news' : null;
+    return room && $('txt') ? 'chat' : null;
+  }
+  async function takeImage(file) {
+    const kind = pasteKind();
+    if (!kind) return;
+    if (kind === 'news') keepNewsDraft();
+    toast('⏳ نجهّز الصورة…', 1500);
+    try { gotImage(kind, await compress(file)); } catch (err) { toast('⚠️ تعذّر فتح الصورة'); }
+  }
+  document.addEventListener('paste', e => {
+    const f = imageIn(e.clipboardData);
+    if (!f || !pasteKind()) return;
+    e.preventDefault();
+    takeImage(f);
+  });
+  document.addEventListener('dragover', e => {
+    if (pasteKind() && [...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault();
+  });
+  document.addEventListener('drop', e => {
+    const f = imageIn(e.dataTransfer);
+    if (!f || !pasteKind()) return;
+    e.preventDefault();
+    takeImage(f);
+  });
+
   // اختيار مصدر الصورة: الكاميرا أو الألبوم
   function photoMenu(kind) {
     modal(`<div class="sheet small">
