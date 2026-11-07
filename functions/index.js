@@ -87,7 +87,7 @@ exports.chatPush = onCall(
       room,
     });
 
-    webpush.setVapidDetails('https://znammous.github.io/family-chat/', VAPID_PUBLIC, VAPID_PRIVATE.value());
+    webpush.setVapidDetails('https://znammous.github.io/family-chat/', VAPID_PUBLIC, VAPID_PRIVATE.value().trim());
     const docs = await db.getAll(...to.map(u => fam.collection('chatPush').doc(u.id)));
     let sent = 0;
     await Promise.all(docs.filter(d => d.exists).map(async d => {
