@@ -210,9 +210,17 @@
       <button class="btn big green" data-act="signIn">👑 أنا ولي الأمر — دخول بحساب Google</button>
       <button class="btn big pink" data-act="goJoin">📱 انضم برمز QR من ولي الأمر</button>
       <p class="muted small">ولي الأمر يدخل بحسابه مرة واحدة، ثم يضيف الأبناء من «العائلة ← أضف فرداً».</p>`}
+      ${installBtn('link-btn')}
       <a class="link-btn" href="${HEROES}">🌟 العودة إلى عالم الأبطال</a>
     </div>`;
   }
+
+  // تثبيت المجلس كتطبيق على الشاشة الرئيسية: الزر يظهر في المتصفح فقط
+  const standalone = () => matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true;
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
+  window.addEventListener('appinstalled', () => { installPrompt = null; toast('✅ ثُبّت التطبيق، تجده في الشاشة الرئيسية'); });
+  const installBtn = cls => (standalone() ? '' : `<button class="${cls}" data-act="installApp">📲 تثبيت التطبيق</button>`);
 
   function showJoin() {
     app.innerHTML = `<div class="center-screen">
@@ -418,6 +426,7 @@
       <div class="setting"><span>🔊 الأصوات</span><button class="switch ${ls.get('family-chat-muted', false) ? '' : 'on'}" data-act="toggleMute"><i></i></button></div>
       ${isParent() ? `<div class="setting"><span>💌 الرسائل الخاصة بين الأفراد<small class="muted">${Cloud.dmOff() ? 'متوقفة: يراسلونك أنت فقط' : 'مسموحة للجميع'}</small></span><button class="switch ${Cloud.dmOff() ? '' : 'on'}" data-act="toggleDm"><i></i></button></div>
       <p class="muted small" dir="ltr">${esc(Cloud.email())}</p>` : ''}
+      ${installBtn('btn plain wide')}
       <a class="btn plain wide" href="${HEROES}">🌟 عالم الأبطال: ألعاب العائلة</a>
       <button class="link-btn danger" data-act="signOut">${isParent() ? 'تسجيل الخروج من هذا الجهاز' : 'فصل هذا الجهاز عن مجلس العائلة'}</button></div>`;
     return h;
@@ -1158,6 +1167,17 @@
   }
 
   const actions = {
+    installApp() {
+      if (!installPrompt) {
+        // متصفح لا يدعم نافذة التثبيت (مثل Safari): نشرح الطريقة يدوياً
+        const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+        toast(ios ? 'من زر المشاركة ⬆️ اختر «إضافة إلى الشاشة الرئيسية»' : 'من قائمة المتصفح ⋮ اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»', 5000);
+        return;
+      }
+      const e = installPrompt;
+      installPrompt = null;
+      e.prompt();
+    },
     signIn() {
       Cloud.signIn().catch(e => { if (e.code !== 'auth/popup-closed-by-user') toast('⚠️ تعذّر تسجيل الدخول'); });
     },
