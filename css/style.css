@@ -264,6 +264,20 @@ textarea.text-in { margin-top: 10px; }
 .sticker-emoji { font-size: 64px; line-height: 1.1; }
 .is-sticker .char.big { animation: pop .4s ease-out; }
 @keyframes pop { from { transform: scale(.4); } 70% { transform: scale(1.1); } }
+/* حركة خاصة لكل ملصق بعد ظهوره */
+.is-sticker .char.m-laugh { animation: pop .4s ease-out, giggle .3s .4s 6; }
+.is-sticker .char.m-angry { animation: pop .4s ease-out, shake .25s .4s 6; }
+.is-sticker .char.m-love, .is-sticker .char.m-thanks { animation: pop .4s ease-out, beat .8s .4s 3; }
+.is-sticker .char.m-party, .is-sticker .char.m-sport, .is-sticker .char.m-cheer { animation: pop .4s ease-out, hop .5s .4s 4; }
+.is-sticker .char.m-sleep, .is-sticker .char.m-pray, .is-sticker .char.m-think { animation: pop .4s ease-out, rock 2s .4s 2; }
+.is-sticker .char.m-wink, .is-sticker .char.m-cool { animation: pop .4s ease-out, tilt .6s .4s 2; }
+@keyframes giggle { 50% { transform: translateY(-4px) rotate(3deg); } }
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@keyframes beat { 30% { transform: scale(1.12); } 60% { transform: scale(.97); } }
+@keyframes hop { 50% { transform: translateY(-12px); } }
+@keyframes rock { 25% { transform: rotate(-5deg); } 75% { transform: rotate(5deg); } }
+@keyframes tilt { 50% { transform: rotate(-8deg) scale(1.05); } }
+@media (prefers-reduced-motion: reduce) { .is-sticker .char.big { animation: none !important; } }
 
 .composer { display: flex; align-items: flex-end; gap: 6px; padding: 6px 8px; padding-bottom: calc(6px + env(safe-area-inset-bottom)); background: rgba(255, 255, 255, .96); border-radius: 24px 24px 0 0; box-shadow: 0 -3px 12px rgba(0, 0, 0, .08); }
 .composer .field { flex: 1; min-width: 0; display: flex; align-items: flex-end; background: #fff; border: 2px solid var(--line); border-radius: 26px; padding: 2px 4px; }

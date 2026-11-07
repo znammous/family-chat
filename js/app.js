@@ -733,8 +733,8 @@
       p.innerHTML = tabs + Object.entries(EMOJI).map(([k, v]) =>
         `<p class="panel-h">${k}</p><div class="emoji-grid">${v.split(' ').map(e => `<button data-act="emoji" data-arg="${e}">${e}</button>`).join('')}</div>`).join('');
     } else if (panel === 'sticker') {
-      p.innerHTML = tabs + `<p class="panel-h">ملصقات فلفولة وأرنوبة — اضغط لإرسال</p><div class="sticker-grid">${Art.STICKERS.map(s =>
-        `<button data-act="sticker" data-arg="${s}">${Art.sticker(s)}</button>`).join('')}</div>`;
+      p.innerHTML = tabs + Art.STICKER_GROUPS(look).map(g => `<p class="panel-h">ملصقات ${g.title}</p><div class="sticker-grid">${g.list.map(s =>
+        `<button data-act="sticker" data-arg="${s}">${Art.sticker(s)}</button>`).join('')}</div>`).join('');
     }
     stick = true;
     toBottom();
