@@ -13,6 +13,7 @@
   let room = null;          // الغرفة المفتوحة
   let peek = null;          // ولي الأمر يشاهد محادثات هذا الفرد
   let panel = null;         // emoji | sticker
+  let panelTab = 'emoji';   // آخر تبويب فُتح في لوحة الإيموجي والملصقات
   let pairing = null;       // رمز إضافة فرد: { code, exp, ready, name, role }
   let joinCode = '';
   let joinHint = '';
@@ -520,8 +521,7 @@
       ${canSend(r) ? `<div class="panel" id="panel" hidden></div>
       <div class="reply-bar" id="replyBar" hidden></div>
       <footer class="composer">
-        <button class="ic" data-act="panel" data-arg="sticker" aria-label="ملصقات">${Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'cheer', 'mini')}</button>
-        <button class="ic" data-act="panel" data-arg="emoji" aria-label="إيموجي">😊</button>
+        <button class="ic" data-act="panel" aria-label="إيموجي وملصقات">😊</button>
         <button class="ic" data-act="photoMenu" data-arg="chat" aria-label="صورة">📷</button>
         <textarea id="txt" rows="1" maxlength="3000" placeholder="اكتب رسالة…"></textarea>
         <button class="ic mic" data-act="recStart" aria-label="تسجيل صوت">🎤</button>
@@ -666,11 +666,14 @@
     const p = $('panel');
     if (!p) return;
     p.hidden = !panel;
+    if (!panel) return;
+    const tab = (t, label) => `<button class="${panel === t ? 'on' : ''}" data-act="panelTab" data-arg="${t}">${label}</button>`;
+    const tabs = `<div class="panel-tabs">${tab('emoji', '😊 إيموجي')}${tab('sticker', `${Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'cheer', 'mini')} ملصقات`)}</div>`;
     if (panel === 'emoji') {
-      p.innerHTML = Object.entries(EMOJI).map(([k, v]) =>
+      p.innerHTML = tabs + Object.entries(EMOJI).map(([k, v]) =>
         `<p class="panel-h">${k}</p><div class="emoji-grid">${v.split(' ').map(e => `<button data-act="emoji" data-arg="${e}">${e}</button>`).join('')}</div>`).join('');
     } else if (panel === 'sticker') {
-      p.innerHTML = `<p class="panel-h">ملصقات فلفولة وأرنوبة — اضغط لإرسال</p><div class="sticker-grid">${Art.STICKERS.map(s =>
+      p.innerHTML = tabs + `<p class="panel-h">ملصقات فلفولة وأرنوبة — اضغط لإرسال</p><div class="sticker-grid">${Art.STICKERS.map(s =>
         `<button data-act="sticker" data-arg="${s}">${Art.sticker(s)}</button>`).join('')}</div>`;
     }
     const box = $('msgs');
@@ -1170,9 +1173,15 @@
 
     setLook(l) { look = l; ls.set('family-chat-look', l); const me = Cloud.me(); Cloud.saveProfile({ ...me, look: l }).catch(() => {}); render(); },
 
-    panel(p) {
-      panel = panel === p ? null : p;
+    panel() {
+      panel = panel ? null : panelTab;
       showPanel();
+      Sound.tap();
+    },
+    panelTab(t) {
+      panel = panelTab = t;
+      showPanel();
+      $('panel').scrollTop = 0;
       Sound.tap();
     },
     emoji(e) {
@@ -1197,7 +1206,7 @@
       t.value = '';
       grow();
       Sound.send();
-      if (panel === 'emoji') { panel = null; showPanel(); }
+      if (panel) { panel = null; showPanel(); }
       const box = $('msgs');
       if (box) box.scrollTop = box.scrollHeight;
     },

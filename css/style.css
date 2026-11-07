@@ -270,6 +270,10 @@ textarea.text-in { margin-top: 10px; }
 .send { width: 46px; height: 46px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; padding: 0; flex-shrink: 0; box-shadow: 0 4px 0 var(--primary-dark); }
 .send:active { box-shadow: 0 1px 0 var(--primary-dark); translate: 0 3px; }
 .panel { max-height: 42vh; overflow-y: auto; background: #fff; border-top: 2px solid var(--line); padding: 6px 10px 10px; }
+.panel-tabs { position: sticky; top: -6px; z-index: 1; display: flex; gap: 6px; margin: -6px -10px 0; padding: 8px 10px 6px; background: #fff; border-bottom: 1px solid var(--line); }
+.panel-tabs button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px; border-radius: 999px; font-weight: 800; font-size: 15px; color: var(--muted); background: #f2f2f2; }
+.panel-tabs button.on { background: var(--primary-light); color: var(--ink, inherit); }
+.panel-tabs .char.mini { width: 22px; height: 26px; }
 .panel-h { margin: 8px 4px 4px; font-weight: 800; color: var(--muted); font-size: 14px; }
 .emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
 .emoji-grid button { font-size: 28px; padding: 4px; border-radius: 12px; }
