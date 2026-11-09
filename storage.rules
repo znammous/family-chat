@@ -1,0 +1,29 @@
+rules_version = '2';
+// صور ورسائل مجلس العائلة الصوتية. تُنشر بـ: firebase deploy --only storage --project tablehero-d582b
+// كل ملف باسم معرّف رسالته، ورابطه لا يصل إلا عبر الرسالة نفسها في Firestore، فالعرض بلا قائمة ملفات.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isOwner(fid) { return request.auth != null && request.auth.uid == fid; }
+    function isMember(fid) {
+      return isOwner(fid) || (request.auth != null &&
+        firestore.exists(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid)));
+    }
+    function isParent(fid) {
+      return isOwner(fid) || (request.auth != null &&
+        firestore.exists(/databases/(default)/documents/families/$(fid)/guardians/$(request.auth.uid)));
+    }
+
+    match /families/{fid}/chat/{room}/{file} {
+      allow get: if isMember(fid);
+      allow list: if false;
+      // لا كتابة فوق ملف موجود، والحجم بحدود ما يخرج من ضغط الصورة وتسجيل الدقيقة
+      allow create: if isMember(fid)
+        && resource == null
+        && request.resource.size <= 1024 * 1024
+        && request.resource.metadata.uid == request.auth.uid
+        && ((file.matches('[A-Za-z0-9]+[.]jpg') && request.resource.contentType == 'image/jpeg')
+            || (file.matches('[A-Za-z0-9]+[.]audio') && request.resource.contentType.matches('audio/.*')));
+      allow delete: if request.auth != null && (resource.metadata.uid == request.auth.uid || isParent(fid));
+    }
+  }
+}

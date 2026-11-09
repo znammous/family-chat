@@ -1,6 +1,6 @@
 // يحفظ ملفات المجلس على الجهاز ليفتح بسرعة وبدون إنترنت (الرسائل نفسها يحفظها Firestore)
 // غيّر رقم الإصدار عند تعديل أي ملف حتى يحدَّث الكاش
-const CACHE = 'family-chat-v34';
+const CACHE = 'family-chat-v35';
 const FILES = [
   './',
   'index.html',
@@ -12,7 +12,7 @@ const FILES = [
   'manifest.webmanifest',
 ];
 // ملفات كبيرة نادرة التغيّر: لا تُنزَّل مع كل إصدار. غيّر رقمها فقط إن عدّلت أحدها
-const STATIC = 'family-chat-static-v1';
+const STATIC = 'family-chat-static-v2';
 const STATIC_FILES = [
   'fonts/baloo-bhaijaan-2-arabic.woff2',
   'fonts/baloo-bhaijaan-2-latin.woff2',
@@ -22,6 +22,7 @@ const STATIC_FILES = [
   'js/vendor/firebase/firebase-auth.js',
   'js/vendor/firebase/firebase-firestore.js',
   'js/vendor/firebase/firebase-functions.js',
+  'js/vendor/firebase/firebase-storage.js',
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',

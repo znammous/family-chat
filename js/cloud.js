@@ -32,6 +32,8 @@ const Cloud = (() => {
   let guardian = false, guardianUnsub = null, guardiansUnsub = null, guardians = {};
   let users = {}, usersReady = false, usersSig = '';
   const rooms = {};   // غرفة ← { unsub, limit, msgs, ready }
+  const outbox = {};  // غرفة ← رسائل صور وصوت ما زالت تُرفع، تظهر فوراً عند مرسلها
+  let storageP = null;
   const listeners = [];
   const notify = what => listeners.forEach(fn => fn(what));
   const set = s => { status = s; notify('status'); };
@@ -72,6 +74,7 @@ const Cloud = (() => {
     if (guardiansUnsub) { guardiansUnsub(); guardiansUnsub = null; }
     config = {}; guardian = false; guardians = {}; marked = {}; markQ = null;
     Object.keys(rooms).forEach(r => { if (rooms[r].unsub) rooms[r].unsub(); delete rooms[r]; });
+    Object.keys(outbox).forEach(r => delete outbox[r]);
     users = {}; usersReady = false; memberData = null; usersSig = '';
   }
 
@@ -333,6 +336,7 @@ const Cloud = (() => {
       snap.docs.slice(i, i + 400).forEach(d => b.delete(d.ref));
       await b.commit();
     }
+    snap.docs.forEach(d => dropMedia(d.data()));
   }
 
   // ───── الغرف والرسائل ─────
@@ -346,6 +350,8 @@ const Cloud = (() => {
     box.unsub = fb.fs.onSnapshot(q, { includeMetadataChanges: true }, snap => {
       const before = new Set(box.msgs.map(m => m.id));
       box.msgs = snap.docs.map(d => ({ id: d.id, ...d.data(), pending: d.metadata.hasPendingWrites })).reverse();
+      const have = new Set(box.msgs.map(m => m.id));
+      box.msgs.push(...(outbox[room] || []).filter(m => !have.has(m.id)));
       const fresh = box.ready ? box.msgs.filter(m => !before.has(m.id)) : [];
       if (!snap.metadata.fromCache) box.ready = true;
       notify({ room, fresh });
@@ -367,12 +373,61 @@ const Cloud = (() => {
 
   const msgsOf = room => (rooms[room] ? rooms[room].msgs : []);
 
+  // ───── الصور والصوت في Storage ─────
+  // الرسالة تحمل رابط الملف في حقلها المعتاد، والصورة تحمل أبعادها بعد # ليُحجز مكانها قبل تحميلها
+  function storage() {
+    if (!storageP) {
+      storageP = import(SDK + 'firebase-storage.js').then(st => {
+        const s = st.getStorage(fb.app);
+        s.maxUploadRetryTime = 15000;   // بعدها نرسل الرسالة بمحتواها بدل الانتظار
+        if (fb.emulator) st.connectStorageEmulator(s, 'localhost', 9199);
+        return { st, s };
+      }).catch(e => { storageP = null; throw e; });
+    }
+    return storageP;
+  }
+  async function upload(room, id, dataUrl, kind) {
+    const blob = await (await fetch(dataUrl)).blob();
+    let dims = '';
+    if (kind === 'img') {
+      try { const b = await createImageBitmap(blob); dims = `#${b.width}x${b.height}`; b.close(); } catch (e) {}
+    }
+    const { st, s } = await storage();
+    const file = st.ref(s, `families/${fid}/chat/${room}/${id}.${kind === 'img' ? 'jpg' : 'audio'}`);
+    await st.uploadBytes(file, blob, {
+      contentType: blob.type.split(';')[0],
+      cacheControl: 'public, max-age=31536000, immutable',
+      customMetadata: { uid: user.uid },
+    });
+    return (await st.getDownloadURL(file)) + dims;
+  }
+  // حذف ملفات رسالة محذوفة؛ الرسائل القديمة ملفها داخلها فلا شيء يُحذف
+  function dropMedia(m) {
+    if (!m) return;
+    ['img', 'audio'].forEach(k => {
+      if (!/^https?:/.test(m[k] || '')) return;
+      storage().then(({ st, s }) => st.deleteObject(st.ref(s, m[k].split('#')[0]))).catch(() => {});
+    });
+  }
+
   function send(room, msg) {
     const data = { from: user.uid, at: Date.now() };
     ['text', 'img', 'sticker', 'title', 'audio', 'dur', 'reply'].forEach(k => { if (msg[k]) data[k] = msg[k]; });
     // نعيد المعرّف فوراً؛ Firestore يرفع الرسالة عند عودة الاتصال إن كان الجهاز بلا إنترنت
     const ref = fb.fs.doc(famCol('chatRooms', room, 'messages'));
-    const done = fb.fs.setDoc(ref, data);
+    const media = ['img', 'audio'].find(k => typeof data[k] === 'string' && data[k].startsWith('data:'));
+    let done;
+    if (media && navigator.onLine) {
+      const local = { id: ref.id, ...data, pending: true };
+      (outbox[room] = outbox[room] || []).push(local);
+      if (rooms[room]) { rooms[room].msgs.push(local); notify({ room, fresh: [] }); }
+      // إن تعذّر الرفع تُرسل الرسالة بمحتواها كما كانت، فلا تضيع
+      done = upload(room, ref.id, data[media], media).then(url => ({ ...data, [media]: url }), () => data).then(d => {
+        const p = fb.fs.setDoc(ref, d);
+        outbox[room] = outbox[room].filter(m => m.id !== ref.id);
+        return p;
+      });
+    } else done = fb.fs.setDoc(ref, data);
     // بعد أن تصل الرسالة إلى الخادم نطلب إرسال تنبيهها لأجهزة العائلة
     const f = fid;
     done.then(() => pushFor(f, room, ref.id)).catch(() => {});
@@ -387,7 +442,12 @@ const Cloud = (() => {
   // صاحب الرسالة يعدّل نصها
   const edit = (room, id, text) => fb.fs.updateDoc(famDoc('chatRooms', room, 'messages', id), { text, edited: Date.now() });
 
-  const remove = (room, id) => fb.fs.deleteDoc(famDoc('chatRooms', room, 'messages', id));
+  function remove(room, id) {
+    const m = msgsOf(room).find(x => x.id === id);
+    const p = fb.fs.deleteDoc(famDoc('chatRooms', room, 'messages', id));
+    p.then(() => dropMedia(m)).catch(() => {});
+    return p;
+  }
 
   // ───── تنبيهات Web Push ─────
   // الجهاز يحفظ عنوان تنبيهاته في chatPush/{uid}.subs، ودالة chatPush في functions/ ترسل إليه

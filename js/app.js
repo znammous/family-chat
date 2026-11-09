@@ -420,7 +420,7 @@
         <header>${Art.avatar(u ? u.avatar : '🙂', 'sm')}<span><b>${esc(nameOf(m.from))}</b><small>${dayOf(m.at)} · ${timeOf(m.at)}${m.pending ? ' · 🕓' : ''}</small></span>
           ${del ? `<button class="link-btn danger small" data-act="delMsg" data-arg="news|${m.id}">حذف</button>` : ''}</header>
         ${m.title ? `<h3>${esc(m.title)}</h3>` : ''}
-        ${m.img ? `<img class="news-img" src="${m.img}" alt="" data-act="view" data-arg="news|${m.id}">` : ''}
+        ${m.img ? `<img class="news-img" loading="lazy" decoding="async" src="${m.img}" alt="" data-act="view" data-arg="news|${m.id}">` : ''}
         ${m.text ? `<p>${rich(m.text)}</p>` : ''}
         ${reactsRow('news', m, true)}
       </article>`;
@@ -664,6 +664,14 @@
     if (window.ResizeObserver) new ResizeObserver(() => { if (stick) toBottom(); }).observe(box);
   }
 
+  // صور Storage تحمل أبعادها بعد #، فيُحجز مكانها قبل وصولها ولا تقفز المحادثة
+  function imgBox(src) {
+    const d = /#(\d+)x(\d+)$/.exec(src);
+    if (!d || !+d[1] || !+d[2]) return '';
+    const r = (+d[1] / +d[2]).toFixed(3);
+    return `style="aspect-ratio:${r};width:min(72vw,280px,calc(340px*${r}))"`;
+  }
+
   // نغيّر من القائمة ما تغيّر فقط؛ الباقي يبقى كما هو بصوره المفكوكة وموضع تمريره.
   // الصورة لا تتغيّر بعد الإرسال، فتوضع خارج النص الذي نقارن به
   function patchMsgs(box, items) {
@@ -679,7 +687,11 @@
         const made = t.content.firstElementChild;
         made.dataset.k = it.k;
         made._h = it.h;
-        if (it.img) made.querySelector('img[data-act="view"]').src = it.img;
+        if (it.img) {
+          // الصورة لا تتغيّر، فنعيد استخدام عنصرها المفكوك عند تغيّر ما حولها (تفاعل أو علامة)
+          const ni = made.querySelector('img[data-act="view"]'), was = el && el.querySelector('img[data-act="view"]');
+          if (was) { was.style.cssText = ni.style.cssText; ni.replaceWith(was); } else ni.src = it.img;
+        }
         if (el) { el.replaceWith(made); if (at === el) at = made; }
         el = made;
       }
@@ -721,7 +733,7 @@
           ${m.reply ? quote(m.reply) : ''}
           ${m.sticker ? Art.sticker(m.sticker) : ''}
           ${m.audio ? voiceBubble(m) : ''}
-          ${m.img ? `<img decoding="async" alt="صورة" data-act="view" data-arg="${room}|${m.id}">` : ''}
+          ${m.img ? `<img decoding="async" loading="lazy" ${imgBox(m.img)} alt="صورة" data-act="view" data-arg="${room}|${m.id}">` : ''}
           ${m.text ? `<div class="text">${rich(m.text)}</div>` : ''}
           <span class="meta">${m.edited ? 'معدّلة · ' : ''}${timeOf(m.at)}${mine ? (m.pending ? ' 🕓' : ' ' + tickSvg(tickOf(room, m))) : ''}</span>
         </div>
@@ -1533,7 +1545,7 @@
       const [r, id] = arg.split('|');
       const m = findMsg(r, id);
       if (!m || !m.img) return;
-      modal(`<div class="viewer" data-act="closeModal"><img src="${m.img}" alt="">${Native.on ? `<button class="btn plain small" data-act="saveImage" data-arg="${arg}">⬇️ حفظ الصورة</button>` : `<a class="btn plain small" href="${m.img}" download="family-photo.jpg">⬇️ حفظ الصورة</a>`}</div>`);
+      modal(`<div class="viewer" data-act="closeModal"><img src="${m.img}" alt=""><button class="btn plain small" data-act="saveImage" data-arg="${arg}">⬇️ حفظ الصورة</button></div>`);
     },
     closeModal() { closeModal(); },
 
@@ -1673,7 +1685,16 @@
     saveImage(arg) {
       const [r, id] = arg.split('|');
       const m = findMsg(r, id);
-      if (m && m.img) Native.saveImage(m.img).catch(() => toast('⚠️ تعذّر حفظ الصورة'));
+      if (!m || !m.img) return;
+      if (Native.on) { Native.saveImage(m.img).catch(() => toast('⚠️ تعذّر حفظ الصورة')); return; }
+      // رابط download لا يعمل مع ملف من نطاق آخر، فنجلبه أولاً
+      fetch(m.img).then(res => res.blob()).then(b => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'family-photo.jpg';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      }).catch(() => toast('⚠️ تعذّر حفظ الصورة'));
     },
     toggleMute() { ls.set('family-chat-muted', !ls.get('family-chat-muted', false)); render(); },
     signOut() {
