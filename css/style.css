@@ -239,8 +239,8 @@ textarea.text-in { margin-top: 10px; }
 .day { text-align: center; margin: 14px 0 8px; }
 .day span { background: rgba(255, 255, 255, .85); color: var(--muted); font-size: 13px; font-weight: 700; padding: 3px 12px; border-radius: 999px; }
 
-.msg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; margin: 3px 0; }
-.msg.head { margin-top: 10px; }
+.msg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; margin: 8px 0; }
+.msg.head { margin-top: 14px; }
 /* في RTL: رسائلي على اليسار ورسائل الآخرين على اليمين */
 .msg.mine { flex-direction: row; justify-content: flex-end; }
 .msg.theirs { justify-content: flex-start; }
