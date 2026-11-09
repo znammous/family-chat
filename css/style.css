@@ -97,7 +97,9 @@ html[data-look="arnooba"] .sun-disc { background: radial-gradient(circle, #fff 0
 
 /* ───── عناصر عامة ───── */
 .center-screen { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px 16px; text-align: center; max-width: 520px; margin: 0 auto; }
-.page { max-width: 640px; margin: 0 auto; padding: 12px 16px 100px; }
+.page { max-width: 640px; margin: 0 auto; padding: calc(12px + env(safe-area-inset-top)) 16px 100px; }
+/* شريط بلون الخلفية خلف ساعة الهاتف وعدسته حتى لا يمر المحتوى تحتهما عند التمرير */
+.page::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: var(--sky1); z-index: 5; pointer-events: none; }
 .logo { margin: 0; font-size: 40px; font-weight: 800; color: var(--primary); text-shadow: 0 3px 0 #fff; line-height: 1.2; }
 .logo.small { font-size: 22px; }
 .title { margin: 4px 0; color: var(--deep); }
