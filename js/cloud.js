@@ -24,6 +24,7 @@ const Cloud = (() => {
 
   // 'loading' | 'unavailable' | 'out' | 'linking' | 'ok' | 'offline'
   let status = 'loading';
+  let comments = [], commentsUnsub = null;
   let fb = null, user = null, fid = null, joining = false;
   let memberUnsub = null, usersUnsub = null, cfgUnsub = null, memberData = null;
   let config = {};   // إعدادات ولي الأمر: { dmOff, groups }
@@ -72,6 +73,8 @@ const Cloud = (() => {
     if (cfgUnsub) { cfgUnsub(); cfgUnsub = null; }
     if (guardianUnsub) { guardianUnsub(); guardianUnsub = null; }
     if (guardiansUnsub) { guardiansUnsub(); guardiansUnsub = null; }
+    if (commentsUnsub) { commentsUnsub(); commentsUnsub = null; }
+    comments = [];
     config = {}; guardian = false; guardians = {}; marked = {}; markQ = null;
     Object.keys(rooms).forEach(r => { if (rooms[r].unsub) rooms[r].unsub(); delete rooms[r]; });
     Object.keys(outbox).forEach(r => delete outbox[r]);
@@ -442,11 +445,53 @@ const Cloud = (() => {
   // صاحب الرسالة يعدّل نصها
   const edit = (room, id, text) => fb.fs.updateDoc(famDoc('chatRooms', room, 'messages', id), { text, edited: Date.now() });
 
-  function remove(room, id) {
+  // صاحب الخبر يعدّل عنوانه ونصه وصورته؛ الصورة الجديدة تُرفع باسم جديد لأن ملفات Storage لا يُكتب فوقها
+  async function editNews(id, { title, text, img }) {
+    const m = msgsOf('news').find(x => x.id === id);
+    if (!m) return;
+    const data = { title, text, edited: Date.now() };
+    const had = m.img || null, now = img || null;
+    if (had !== now) {
+      data.img = now || fb.fs.deleteField();
+      if (now && now.startsWith('data:') && navigator.onLine) {
+        const name = fb.fs.doc(famCol('chatRooms', 'news', 'messages')).id;
+        data.img = await upload('news', name, now, 'img').catch(() => now);
+      }
+    }
+    await fb.fs.updateDoc(famDoc('chatRooms', 'news', 'messages', id), data);
+    if (had !== now) dropMedia({ img: had });
+  }
+
+  // ───── تعليقات الأخبار ─────
+  // مجموعة واحدة لكل التعليقات (لا داخل الخبر) فلا يكبر مستند الخبر، ومتابعة واحدة لآخر 300 تعليق
+  function watchComments() {
+    if (commentsUnsub) return;
+    const q = fb.fs.query(famCol('chatRooms', 'news', 'comments'), fb.fs.orderBy('at', 'desc'), fb.fs.limit(300));
+    commentsUnsub = fb.fs.onSnapshot(q, snap => {
+      comments = snap.docs.map(d => ({ id: d.id, ...d.data(), pending: d.metadata.hasPendingWrites })).reverse();
+      notify({ comments: true });
+    }, () => {});
+  }
+  const commentsOf = news => comments.filter(c => c.news === news);
+  const addComment = (news, text) => fb.fs.setDoc(fb.fs.doc(famCol('chatRooms', 'news', 'comments')), { from: user.uid, at: Date.now(), news, text });
+  const delComment = id => fb.fs.deleteDoc(famDoc('chatRooms', 'news', 'comments', id));
+
+  // تعليقات الخبر تُحذف قبله، فالقواعد تتحقق من صاحب الخبر ما دام موجوداً
+  async function dropComments(news) {
+    const col = famCol('chatRooms', 'news', 'comments');
+    const snap = await fb.fs.getDocs(fb.fs.query(col, fb.fs.where('news', '==', news)));
+    for (let i = 0; i < snap.docs.length; i += 400) {
+      const b = fb.fs.writeBatch(fb.db);
+      snap.docs.slice(i, i + 400).forEach(d => b.delete(d.ref));
+      await b.commit();
+    }
+  }
+
+  async function remove(room, id) {
     const m = msgsOf(room).find(x => x.id === id);
-    const p = fb.fs.deleteDoc(famDoc('chatRooms', room, 'messages', id));
-    p.then(() => dropMedia(m)).catch(() => {});
-    return p;
+    if (room === 'news') await dropComments(id).catch(() => {});
+    await fb.fs.deleteDoc(famDoc('chatRooms', room, 'messages', id));
+    dropMedia(m);
   }
 
   // ───── تنبيهات Web Push ─────
@@ -510,7 +555,8 @@ const Cloud = (() => {
   return {
     start, signIn, signOut, join, createCode, saveProfile, beat, mark, removeMember, forget, setDmOff, grant, revoke,
     groups, addGroup, renameGroup, removeGroup,
-    watch, shrink, more, hasMore, msgsOf, send, react, edit, remove,
+    watch, shrink, more, hasMore, msgsOf, send, react, edit, editNews, remove,
+    watchComments, commentsOf, addComment, delComment,
     pushSupported, enablePush, disablePush, pushOn: () => !!ls.get(PUSH_KEY),
     on: fn => listeners.push(fn),
     status: () => status,

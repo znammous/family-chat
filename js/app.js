@@ -149,7 +149,7 @@
   // الأخبار تُعرض كاملة في صفحتها فلها عدد أكبر.
   const OPEN_LIMIT = 60;
   const idleLimit = r => (r === 'news' ? 40 : 20);
-  const watchAll = () => allRooms().forEach(r => Cloud.watch(r, r === room ? OPEN_LIMIT : idleLimit(r)));
+  const watchAll = () => { allRooms().forEach(r => Cloud.watch(r, r === room ? OPEN_LIMIT : idleLimit(r))); Cloud.watchComments(); };
 
   // ───── المقروء ─────
   const read = ls.get('family-chat-read', {});
@@ -416,27 +416,56 @@
     h += msgs.map(m => {
       const u = userOf(m.from);
       const del = m.from === uid() || isParent();
+      const edit = m.from === uid() && !m.pending;
+      const n = Cloud.commentsOf(m.id).length;
       return `<article class="card news">
-        <header>${Art.avatar(u ? u.avatar : '🙂', 'sm')}<span><b>${esc(nameOf(m.from))}</b><small>${dayOf(m.at)} · ${timeOf(m.at)}${m.pending ? ' · 🕓' : ''}</small></span>
+        <header>${Art.avatar(u ? u.avatar : '🙂', 'sm')}<span><b>${esc(nameOf(m.from))}</b><small>${dayOf(m.at)} · ${timeOf(m.at)}${m.edited ? ' · معدّل' : ''}${m.pending ? ' · 🕓' : ''}</small></span>
+          ${edit ? `<button class="link-btn small" data-act="newsEdit" data-arg="${m.id}">تعديل</button>` : ''}
           ${del ? `<button class="link-btn danger small" data-act="delMsg" data-arg="news|${m.id}">حذف</button>` : ''}</header>
         ${m.title ? `<h3>${esc(m.title)}</h3>` : ''}
         ${m.img ? `<img class="news-img" loading="lazy" decoding="async" src="${m.img}" alt="" data-act="view" data-arg="news|${m.id}">` : ''}
         ${m.text ? `<p>${rich(m.text)}</p>` : ''}
         ${reactsRow('news', m, true)}
+        ${m.pending ? '' : `<button class="link-btn small" data-act="cmOpen" data-arg="${m.id}">💬 ${n ? `التعليقات (${n})` : 'أضف تعليقاً'}</button>`}
       </article>`;
     }).join('');
     return h;
   }
 
+  function commentsHtml(news) {
+    const list = Cloud.commentsOf(news);
+    if (!list.length) return '<p class="muted small">لا تعليقات بعد، كن أول من يعلّق 💬</p>';
+    const m = findMsg('news', news);
+    return list.map(c => {
+      const u = userOf(c.from);
+      const del = c.from === uid() || (m && m.from === uid()) || isParent();
+      return `<div class="cm">${Art.avatar(u ? u.avatar : '🙂', 'sm')}<div class="cm-body">
+        <b>${esc(nameOf(c.from))}</b><small>${dayOf(c.at)} · ${timeOf(c.at)}${c.pending ? ' · 🕓' : ''}</small>
+        ${del ? `<button class="link-btn danger small" data-act="cmDel" data-arg="${c.id}">حذف</button>` : ''}
+        <p>${rich(c.text)}</p></div></div>`;
+    }).join('');
+  }
+  function showComments(news) {
+    modal(`<div class="sheet">
+      <h3>💬 التعليقات</h3>
+      <div id="cmList" class="cm-list" data-news="${news}">${commentsHtml(news)}</div>
+      <div class="row cm-new"><input id="cmTxt" class="text-in" maxlength="500" placeholder="اكتب تعليقك…"><button class="btn green" data-act="cmSend" data-arg="${news}">إرسال</button></div>
+      <button class="btn plain wide" data-act="closeModal">إغلاق</button>
+    </div>`);
+    const l = $('cmList');
+    l.scrollTop = l.scrollHeight;
+    $('cmTxt').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) actions.cmSend(news); });
+  }
+
   function showNewsModal() {
     const d = newsDraft;
     modal(`<div class="sheet">
-      <h3>📣 خبر جديد</h3>
+      <h3>${d.edit ? '✏️ تعديل الخبر' : '📣 خبر جديد'}</h3>
       <input id="newsTitle" class="text-in" maxlength="120" placeholder="عنوان الخبر (مثال: نجحت بامتياز! 🎉)" value="${esc(d.title || '')}">
       <textarea id="newsText" class="text-in" rows="4" maxlength="3000" placeholder="اكتب التفاصيل…">${esc(d.text || '')}</textarea>
       ${d.img ? `<img class="news-img" src="${d.img}" alt=""><button class="link-btn danger" data-act="newsNoImg">إزالة الصورة</button>`
         : `<div class="row"><button class="btn blue" data-act="camera" data-arg="news">📸 صوّر</button><label class="btn blue">🖼️ من الألبوم<input type="file" accept="image/*" hidden data-pick="news"></label></div>`}
-      <div class="row"><button class="btn green" data-act="newsPost">انشر الخبر 🚀</button><button class="btn plain" data-act="closeModal">إلغاء</button></div>
+      <div class="row"><button class="btn green" data-act="newsPost">${d.edit ? 'حفظ ✅' : 'انشر الخبر 🚀'}</button><button class="btn plain" data-act="closeModal">إلغاء</button></div>
     </div>`);
   }
   const keepNewsDraft = () => {
@@ -1549,12 +1578,37 @@
     },
     closeModal() { closeModal(); },
 
-    newsNew() { newsDraft = newsDraft || {}; showNewsModal(); },
+    newsNew() { newsDraft = newsDraft && !newsDraft.edit ? newsDraft : {}; showNewsModal(); },
+    newsEdit(id) {
+      const m = findMsg('news', id);
+      if (!m || m.from !== uid()) return;
+      newsDraft = { edit: id, title: m.title || '', text: m.text || '', img: m.img || null };
+      showNewsModal();
+    },
+    cmOpen(id) { showComments(id); },
+    cmSend(news) {
+      const t = $('cmTxt');
+      const text = t ? t.value.trim() : '';
+      if (!text) return;
+      t.value = '';
+      Cloud.addComment(news, text).catch(() => toast('⚠️ تعذّر إرسال التعليق'));
+    },
+    cmDel(id) {
+      if (!confirm('حذف هذا التعليق؟')) return;
+      Cloud.delComment(id).catch(() => toast('⚠️ تعذّر حذف التعليق'));
+    },
     newsNoImg() { keepNewsDraft(); newsDraft.img = null; showNewsModal(); },
     newsPost() {
       keepNewsDraft();
       const d = newsDraft;
       if (!d.title.trim() && !d.text.trim() && !d.img) { toast('✏️ اكتب الخبر أولاً'); return; }
+      if (d.edit) {
+        Cloud.editNews(d.edit, { title: d.title.trim(), text: d.text.trim(), img: d.img })
+          .then(() => toast('✏️ عُدّل الخبر'), () => toast('⚠️ تعذّر التعديل'));
+        newsDraft = null;
+        closeModal();
+        return;
+      }
       Cloud.send('news', { title: d.title.trim(), text: d.text.trim(), img: d.img });
       newsDraft = null;
       closeModal();
@@ -1803,6 +1857,12 @@
       // تغيّر إذن الرسائل الخاصة: نعيد رسم الغرفة فقط إن تغيّر ظهور خانة الكتابة
       if (room && $('msgs')) { if (!!$('txt') !== canSend(room)) render(); else { const t = document.querySelector('.room-top .rt-main b'); if (t) t.textContent = roomTitle(room); } }
       else refresh();
+      return;
+    }
+    if (what && what.comments) {
+      const l = $('cmList');
+      if (l) { l.innerHTML = commentsHtml(l.dataset.news); l.scrollTop = l.scrollHeight; }
+      if (!room && tab === 'news') refresh();
       return;
     }
     if (what && what.room) {

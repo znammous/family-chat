@@ -158,7 +158,34 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'edited'])
           && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 3000
           && request.resource.data.edited is number;
+        // صاحب الخبر يعدّل عنوانه ونصه وصورته
+        allow update: if room == 'news' && isMember(fid) && resource.data.from == request.auth.uid && validNewsEdit();
         allow delete: if isMember(fid) && inRoom(room) && resource.data.from == request.auth.uid;
+      }
+      function validNewsEdit() {
+        let d = request.resource.data;
+        return d.diff(resource.data).affectedKeys().hasOnly(['title', 'text', 'img', 'edited'])
+          && d.edited is number
+          && (!('title' in d) || (d.title is string && d.title.size() <= 120))
+          && (!('text' in d) || (d.text is string && d.text.size() <= 3000))
+          && (!('img' in d) || (d.img is string && d.img.size() <= 950000));
+      }
+      function newsOf(id) {
+        return /databases/$(database)/documents/families/$(fid)/chatRooms/news/messages/$(id);
+      }
+      // تعليقات الأخبار: يكتب كل فرد باسمه، ويحذف التعليق كاتبه أو صاحب الخبر (وولي الأمر بالقاعدة العامة)
+      match /chatRooms/news/comments/{cid} {
+        allow read: if isMember(fid);
+        allow create: if isMember(fid)
+          && request.resource.data.keys().hasOnly(['from', 'at', 'news', 'text'])
+          && request.resource.data.keys().hasAll(['from', 'at', 'news', 'text'])
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.at is number
+          && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 500
+          && request.resource.data.news is string && request.resource.data.news.matches('[A-Za-z0-9]{1,40}')
+          && exists(newsOf(request.resource.data.news));
+        allow delete: if isMember(fid)
+          && (resource.data.from == request.auth.uid || get(newsOf(resource.data.news)).data.from == request.auth.uid);
       }
 
       // عناوين تنبيهات الجهاز (Web Push): يكتبها صاحبها فقط، وتقرؤها دالة التنبيهات بصلاحيات الخادم
