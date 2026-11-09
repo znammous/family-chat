@@ -145,7 +145,11 @@
     }
     return list;
   }
-  const watchAll = () => allRooms().forEach(r => Cloud.watch(r, r === room ? 300 : 40));
+  // الرسائل تحمل صورها داخلها، فنتابع في الخلفية ما يكفي للمعاينة وعدّ غير المقروء فقط.
+  // الأخبار تُعرض كاملة في صفحتها فلها عدد أكبر.
+  const OPEN_LIMIT = 60;
+  const idleLimit = r => (r === 'news' ? 40 : 20);
+  const watchAll = () => allRooms().forEach(r => Cloud.watch(r, r === room ? OPEN_LIMIT : idleLimit(r)));
 
   // ───── المقروء ─────
   const read = ls.get('family-chat-read', {});
@@ -508,15 +512,28 @@
     </li>`).join('')}</ul></div>`;
   }
 
+  // مكتبة رمز QR تُحمَّل عند أول حاجة إليها فقط
+  let qrLoading = false;
+  function pairQr() {
+    if (!window.qrcode) {
+      if (!qrLoading) {
+        qrLoading = true;
+        loadScript('js/vendor/qrcode.js').then(refresh).catch(() => { qrLoading = false; });
+      }
+      return '<span class="spinner"></span>';
+    }
+    const qr = qrcode(0, 'M');
+    qr.addData(`${Native.on ? Native.WEB_URL : location.origin + location.pathname}#join=${pairing.code}`);
+    qr.make();
+    return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  }
+
   function addMemberBox() {
     if (pairing && pairing.exp > Date.now()) {
-      const qr = qrcode(0, 'M');
-      qr.addData(`${Native.on ? Native.WEB_URL : location.origin + location.pathname}#join=${pairing.code}`);
-      qr.make();
       return `<div class="card pair-box ${pairing.ready ? '' : 'pending'}">
         <h3>${pairing.relink ? `🔁 إعادة ربط ${esc(pairing.name)}` : `📱 أضف ${esc(pairing.name || 'فرداً')}`}</h3>
         <p>على جهاز ${esc(pairing.name || 'الفرد الجديد')}: افتح مجلس العائلة ← «انضم برمز QR» ثم امسح الرمز، أو امسحه بكاميرا الجهاز مباشرة.</p>
-        <div class="qr">${qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true })}</div>
+        <div class="qr">${pairQr()}</div>
         <b class="pair-code" dir="ltr">${pairing.code.slice(0, 4)}-${pairing.code.slice(4)}</b>
         <small class="muted">${pairing.ready ? '✅ جاهز · صالح لعشر دقائق' : '<span class="spinner"></span> جارٍ تفعيل الرمز…'}</small>
         <button class="link-btn" data-act="cancelPair">إلغاء</button>
@@ -647,42 +664,78 @@
     if (window.ResizeObserver) new ResizeObserver(() => { if (stick) toBottom(); }).observe(box);
   }
 
+  // نغيّر من القائمة ما تغيّر فقط؛ الباقي يبقى كما هو بصوره المفكوكة وموضع تمريره.
+  // الصورة لا تتغيّر بعد الإرسال، فتوضع خارج النص الذي نقارن به
+  function patchMsgs(box, items) {
+    const keep = new Set(items.map(it => it.k));
+    const old = new Map();
+    Array.from(box.children).forEach(el => { if (keep.has(el.dataset.k)) old.set(el.dataset.k, el); else el.remove(); });
+    const t = document.createElement('template');
+    let at = box.firstElementChild;
+    items.forEach(it => {
+      let el = old.get(it.k);
+      if (!el || el._h !== it.h) {
+        t.innerHTML = it.h;
+        const made = t.content.firstElementChild;
+        made.dataset.k = it.k;
+        made._h = it.h;
+        if (it.img) made.querySelector('img[data-act="view"]').src = it.img;
+        if (el) { el.replaceWith(made); if (at === el) at = made; }
+        el = made;
+      }
+      if (el === at) at = at.nextElementSibling; else box.insertBefore(el, at);
+    });
+  }
+
+  // عند جلب رسائل أقدم تبقى الرسالة التي يقرؤها في مكانها
+  let moreAnchor = null;   // { el, top, n }
+
   function refreshRoom(first) {
     const box = $('msgs');
     if (!box) return;
-    const near = first || stick || box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    const near = !moreAnchor && (first || stick || box.scrollHeight - box.scrollTop - box.clientHeight < 120);
     if (near) stick = true;
     const msgs = Cloud.msgsOf(room);
     const group = room === 'family' || isGroup(room) || !dmPeers(room).includes(myKey());
-    let h = '', lastDay = '', lastFrom = '';
+    const items = [];
+    let lastDay = '', lastFrom = '';
     if (!msgs.length) {
-      h = Cloud.roomReady(room)
+      items.push({ k: 'empty', h: Cloud.roomReady(room)
         ? `<div class="empty-room">${Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'happy', 'mid bob')}<p>قل مرحباً! 👋<br><small>أرسل رسالة أو ملصقاً لتبدأ المحادثة</small></p></div>`
-        : '<div class="empty-room"><span class="spinner"></span></div>';
+        : '<div class="empty-room"><span class="spinner"></span></div>' });
+    } else if (Cloud.hasMore(room)) {
+      items.push({ k: 'more', h: '<div class="more-msgs"><button class="link-btn" data-act="moreMsgs">⬆️ عرض رسائل أقدم</button></div>' });
     }
     msgs.forEach(m => {
       const day = dayOf(m.at);
-      if (day !== lastDay) { h += `<div class="day"><span>${day}</span></div>`; lastDay = day; lastFrom = ''; }
+      if (day !== lastDay) { items.push({ k: 'day:' + day, h: `<div class="day"><span>${day}</span></div>` }); lastDay = day; lastFrom = ''; }
       const mine = isMe(m.from);
       const u = userOf(m.from);
       const head = !mine && group && keyOf(m.from) !== lastFrom;
       lastFrom = keyOf(m.from);
       const kind = m.sticker ? 'is-sticker' : m.audio ? 'is-audio' : m.img ? 'is-img' : (m.text && onlyEmoji(m.text) ? 'is-jumbo' : '');
-      h += `<div class="msg ${mine ? 'mine' : 'theirs'} ${kind} ${head ? 'head' : ''}" data-id="${m.id}">
+      items.push({ k: m.id, img: m.img, h: `<div class="msg ${mine ? 'mine' : 'theirs'} ${kind} ${head ? 'head' : ''}" data-id="${m.id}">
         ${!mine && group ? `<span class="m-av">${head ? Art.avatar(u ? u.avatar : '🙂', 'sm') : ''}</span>` : ''}
         <div class="bubble" data-act="msgMenu" data-arg="${m.id}">
           ${head ? `<b class="who" style="color:${colorOf(m.from)}">${esc(nameOf(m.from))}</b>` : ''}
           ${m.reply ? quote(m.reply) : ''}
           ${m.sticker ? Art.sticker(m.sticker) : ''}
           ${m.audio ? voiceBubble(m) : ''}
-          ${m.img ? `<img src="${m.img}" alt="صورة" data-act="view" data-arg="${room}|${m.id}">` : ''}
+          ${m.img ? `<img decoding="async" alt="صورة" data-act="view" data-arg="${room}|${m.id}">` : ''}
           ${m.text ? `<div class="text">${rich(m.text)}</div>` : ''}
           <span class="meta">${m.edited ? 'معدّلة · ' : ''}${timeOf(m.at)}${mine ? (m.pending ? ' 🕓' : ' ' + tickSvg(tickOf(room, m))) : ''}</span>
         </div>
         ${reactsRow(room, m, false)}
-      </div>`;
+      </div>` });
     });
-    box.innerHTML = h;
+    patchMsgs(box, items);
+    if (moreAnchor) {
+      if (moreAnchor.el.isConnected) {
+        const top = moreAnchor.el.getBoundingClientRect().top;
+        box.scrollTop += top - moreAnchor.top;
+      }
+      if (msgs.length > moreAnchor.n) moreAnchor = null;
+    }
     paintVoice();
     if (near) { toBottom(); requestAnimationFrame(() => { if (stick) toBottom(); }); setTimeout(() => { if (stick) toBottom(); }, 300); }
     markRead(room);
@@ -1195,12 +1248,15 @@
     if (scanStream) scanStream.getTracks().forEach(t => t.stop());
     scanStream = null;
   }
-  const loadJsQR = () => window.jsQR ? Promise.resolve() : new Promise((ok, fail) => {
-    const sc = document.createElement('script');
-    sc.src = 'js/vendor/jsQR.js';
-    sc.onload = ok; sc.onerror = fail;
-    document.head.appendChild(sc);
-  });
+  function loadScript(src) {
+    return new Promise((ok, fail) => {
+      const sc = document.createElement('script');
+      sc.src = src;
+      sc.onload = ok; sc.onerror = fail;
+      document.head.appendChild(sc);
+    });
+  }
+  const loadJsQR = () => window.jsQR ? Promise.resolve() : loadScript('js/vendor/jsQR.js');
   async function startScan() {
     if (scanStream) return;
     try {
@@ -1261,13 +1317,15 @@
     room = r;
     panel = null;
     replyTo = null;
-    Cloud.watch(r, 300);
+    moreAnchor = null;
+    Cloud.watch(r, OPEN_LIMIT);
     history.pushState({ room: r }, '');
     render();
   }
   function closeRoom() {
     recStop(true);
     if (player) { player.audio.pause(); player = null; }
+    if (room) Cloud.shrink(room, idleLimit(room));
     room = null;
     panel = null;
     replyTo = null;
@@ -1286,6 +1344,15 @@
   }
 
   const actions = {
+    moreMsgs() {
+      const box = $('msgs'), el = box && box.querySelector('.msg');
+      if (!el) return;
+      stick = false;
+      moreAnchor = { el, top: el.getBoundingClientRect().top, n: Cloud.msgsOf(room).length };
+      // إن لم توجد رسائل أقدم فعلاً لن يزيد العدد، فلا نبقى في هذا الوضع
+      setTimeout(() => { moreAnchor = null; }, 3000);
+      Cloud.more(room, OPEN_LIMIT);
+    },
     installApp() {
       if (!installPrompt) {
         // متصفح لا يدعم نافذة التثبيت (مثل Safari): نشرح الطريقة يدوياً
@@ -1674,6 +1741,11 @@
       wasStatus = st;
       if (!Cloud.role()) { room = null; pairing = null; peek = null; }
       render();
+      return;
+    }
+    // «آخر ظهور» لا يظهر داخل المحادثة ولا في صفحة الأخبار (وفيها الصور)
+    if (what === 'presence') {
+      if (!room && tab !== 'news') refresh();
       return;
     }
     if (what === 'users') {

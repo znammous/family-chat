@@ -3,7 +3,8 @@
 // وتُسجَّل في families/{fid}/members/{uid} — نفس السجلّ الذي تستخدمه الألعاب.
 // الشات: families/{fid}/chatUsers/{uid} ملف كل فرد، و families/{fid}/chatRooms/{غرفة}/messages رسائلها.
 const Cloud = (() => {
-  const SDK = 'https://www.gstatic.com/firebasejs/10.14.1/';
+  // نسخة 10.14.1 محفوظة مع التطبيق: تعمل داخل أندرويد دون إنترنت (لا يوجد هناك عامل خدمة)
+  const SDK = new URL('js/vendor/firebase/', document.baseURI).href;
   const FIREBASE = {
     apiKey: 'AIzaSyBny9DhGm7ySaAa9lBxw3tbHaZ7OdCAPNU',
     authDomain: 'tablehero-d582b.firebaseapp.com',
@@ -29,7 +30,7 @@ const Cloud = (() => {
   // ولي أمر آخر: جهاز انضم برمز «ولي أمر» (A|الاسم) فسُجّل في families/{fid}/guardians/{معرّفه}،
   // وله ما لولي الأمر صاحب الحساب (قواعد Firestore المشتركة مع الألعاب)
   let guardian = false, guardianUnsub = null, guardiansUnsub = null, guardians = {};
-  let users = {}, usersReady = false;
+  let users = {}, usersReady = false, usersSig = '';
   const rooms = {};   // غرفة ← { unsub, limit, msgs, ready }
   const listeners = [];
   const notify = what => listeners.forEach(fn => fn(what));
@@ -71,7 +72,7 @@ const Cloud = (() => {
     if (guardiansUnsub) { guardiansUnsub(); guardiansUnsub = null; }
     config = {}; guardian = false; guardians = {}; marked = {}; markQ = null;
     Object.keys(rooms).forEach(r => { if (rooms[r].unsub) rooms[r].unsub(); delete rooms[r]; });
-    users = {}; usersReady = false; memberData = null;
+    users = {}; usersReady = false; memberData = null; usersSig = '';
   }
 
   async function onUser(u) {
@@ -104,7 +105,13 @@ const Cloud = (() => {
       snap.docs.forEach(d => { users[d.id] = { id: d.id, ...d.data() }; });
       if (!snap.metadata.fromCache || users[u.uid]) usersReady = true;
       status = snap.metadata.fromCache ? 'offline' : 'ok';
-      notify('users');
+      // تغيّر «آخر ظهور» وحده يصل من كل فرد كل دقيقة تقريباً، ولا يستحق إعادة رسم المحادثة
+      // ترتيب الحقول يختلف بين النسخة المحلية ونسخة الخادم، فنرتّبها قبل المقارنة
+      const canon = v => (v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().map(k => [k, canon(v[k])]) : v);
+      const sig = status + usersReady + JSON.stringify(canon(Object.fromEntries(Object.entries(users).map(([k, v]) => [k, { ...v, seen: 0 }]))));
+      const onlySeen = sig === usersSig;
+      usersSig = sig;
+      notify(onlySeen ? 'presence' : 'users');
     }, () => set('offline'));
     cfgUnsub = fb.fs.onSnapshot(famDoc('chatConfig', 'settings'), snap => {
       config = snap.exists() ? snap.data() : {};
@@ -345,6 +352,19 @@ const Cloud = (() => {
     }, () => { box.ready = true; notify({ room, fresh: [] }); });
   }
 
+  // بعد الخروج من محادثة نعود إلى العدد الأصغر لنحرّر صورها من الذاكرة
+  function shrink(room, limit) {
+    const r = rooms[room];
+    if (!r || r.limit <= limit) return;
+    r.msgs = r.msgs.slice(-limit);
+    r.limit = 0;
+    watch(room, limit);
+  }
+  // «رسائل أقدم»: نوسّع المتابعة بمقدار step
+  function more(room, step) { if (rooms[room]) watch(room, rooms[room].limit + step); }
+  // عدد الرسائل بلغ الحد، فقد توجد أقدم منها
+  const hasMore = room => !!rooms[room] && rooms[room].msgs.length >= rooms[room].limit;
+
   const msgsOf = room => (rooms[room] ? rooms[room].msgs : []);
 
   function send(room, msg) {
@@ -430,7 +450,7 @@ const Cloud = (() => {
   return {
     start, signIn, signOut, join, createCode, saveProfile, beat, mark, removeMember, forget, setDmOff, grant, revoke,
     groups, addGroup, renameGroup, removeGroup,
-    watch, msgsOf, send, react, edit, remove,
+    watch, shrink, more, hasMore, msgsOf, send, react, edit, remove,
     pushSupported, enablePush, disablePush, pushOn: () => !!ls.get(PUSH_KEY),
     on: fn => listeners.push(fn),
     status: () => status,

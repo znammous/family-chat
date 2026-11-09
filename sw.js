@@ -1,51 +1,55 @@
 // يحفظ ملفات المجلس على الجهاز ليفتح بسرعة وبدون إنترنت (الرسائل نفسها يحفظها Firestore)
 // غيّر رقم الإصدار عند تعديل أي ملف حتى يحدَّث الكاش
-const CACHE = 'family-chat-v33';
+const CACHE = 'family-chat-v34';
 const FILES = [
   './',
   'index.html',
   'css/style.css',
-  'fonts/baloo-bhaijaan-2-arabic.woff2',
-  'fonts/baloo-bhaijaan-2-latin.woff2',
   'js/art.js',
-  'js/vendor/qrcode.js',
-  'js/vendor/jsQR.js',
   'js/native.js',
   'js/cloud.js',
   'js/app.js',
   'manifest.webmanifest',
+];
+// ملفات كبيرة نادرة التغيّر: لا تُنزَّل مع كل إصدار. غيّر رقمها فقط إن عدّلت أحدها
+const STATIC = 'family-chat-static-v1';
+const STATIC_FILES = [
+  'fonts/baloo-bhaijaan-2-arabic.woff2',
+  'fonts/baloo-bhaijaan-2-latin.woff2',
+  'js/vendor/qrcode.js',
+  'js/vendor/jsQR.js',
+  'js/vendor/firebase/firebase-app.js',
+  'js/vendor/firebase/firebase-auth.js',
+  'js/vendor/firebase/firebase-firestore.js',
+  'js/vendor/firebase/firebase-functions.js',
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/badge.png',
 ];
+const fresh = f => new Request(f, { cache: 'reload' });
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE)
-    .then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' }))))
-    .then(() => self.skipWaiting()));
+  e.waitUntil(Promise.all([
+    caches.open(CACHE).then(c => c.addAll(FILES.map(fresh))),
+    caches.open(STATIC).then(async c => {
+      const have = await Promise.all(STATIC_FILES.map(f => c.match(f)));
+      return c.addAll(STATIC_FILES.filter((f, i) => !have[i]).map(fresh));
+    }),
+  ]).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // النطاق نفسه تستخدمه الألعاب: لا نمس إلا ذاكرتنا
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('family-chat-') && k !== CACHE && k !== STATIC).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
-const SDK = 'https://www.gstatic.com/firebasejs/';
-
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  if (e.request.url.startsWith(SDK)) {
-    e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy));
-      return res;
-    })));
-    return;
-  }
   if (new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true })
