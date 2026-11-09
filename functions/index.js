@@ -63,21 +63,31 @@ exports.chatPush = onCall(
   { region: 'me-central1', secrets: [VAPID_PRIVATE], memory: '256MiB' },
   async req => {
     const uid = req.auth && req.auth.uid;
-    const { fid, room, msg } = req.data || {};
+    const { fid, room, msg, comment } = req.data || {};
     if (!uid) throw new HttpsError('unauthenticated', 'sign in');
     if (![fid, room, msg].every(x => typeof x === 'string' && ID.test(x))) throw new HttpsError('invalid-argument', 'bad ids');
+    if (comment !== undefined && (typeof comment !== 'string' || !ID.test(comment) || room !== 'news')) throw new HttpsError('invalid-argument', 'bad ids');
     const fam = db.collection('families').doc(fid);
-    const snap = await fam.collection('chatRooms').doc(room).collection('messages').doc(msg).get();
+    const news = fam.collection('chatRooms').doc(room);
+    // التعليق: msg هو الخبر و comment هو التعليق، والتنبيه لصاحب الخبر وحده
+    const snap = await (comment ? news.collection('comments').doc(comment) : news.collection('messages').doc(msg)).get();
     const m = snap.exists ? snap.data() : null;
     // لا يطلب التنبيه إلا صاحب الرسالة، ولرسالة حديثة، ومرة واحدة فقط
-    if (!m || m.from !== uid) throw new HttpsError('permission-denied', 'not your message');
+    if (!m || m.from !== uid || (comment && m.news !== msg)) throw new HttpsError('permission-denied', 'not your message');
     if (Date.now() - m.at > 15 * 60 * 1000) return { sent: 0 };
+    let owner = null;
+    if (comment) {
+      const n = await news.collection('messages').doc(msg).get();
+      if (!n.exists) return { sent: 0 };
+      owner = n.data().from;
+    }
     try {
-      await fam.collection('chatPushSent').doc(`${room}~${msg}`).create({ at: Date.now() });
+      await fam.collection('chatPushSent').doc(comment ? `${room}~${msg}~${comment}` : `${room}~${msg}`).create({ at: Date.now() });
     } catch (e) { return { sent: 0 }; }
 
     let title;
-    if (room === 'family') title = '🏡 بيت العائلة';
+    if (comment) title = '💬 تعليق على خبرك';
+    else if (room === 'family') title = '🏡 بيت العائلة';
     else if (room === 'news') title = '📰 أخبار العائلة';
     else if (room.startsWith('g_')) {
       const cfg = await fam.collection('chatConfig').doc('settings').get();
@@ -90,7 +100,7 @@ exports.chatPush = onCall(
     const users = {};
     usersSnap.docs.forEach(d => { users[d.id] = { id: d.id, ...d.data() }; });
     const p = people(users);
-    const to = recipients(room, m.from, p);
+    const to = recipients(room, m.from, p).filter(u => !comment || p.keyOf(u.id) === p.keyOf(owner));
     if (!to.length) return { sent: 0 };
 
     const name = p.nameOf(m.from);

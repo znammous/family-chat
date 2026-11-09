@@ -473,7 +473,14 @@ const Cloud = (() => {
     }, () => {});
   }
   const commentsOf = news => comments.filter(c => c.news === news);
-  const addComment = (news, text) => fb.fs.setDoc(fb.fs.doc(famCol('chatRooms', 'news', 'comments')), { from: user.uid, at: Date.now(), news, text });
+  // بعد وصول التعليق إلى الخادم نطلب تنبيه صاحب الخبر، إلا إن كان المعلّق هو صاحبه
+  function addComment(news, text) {
+    const ref = fb.fs.doc(famCol('chatRooms', 'news', 'comments'));
+    const done = fb.fs.setDoc(ref, { from: user.uid, at: Date.now(), news, text });
+    const n = msgsOf('news').find(x => x.id === news), f = fid;
+    if (!n || n.from !== user.uid) done.then(() => pushFor(f, 'news', news, ref.id)).catch(() => {});
+    return done;
+  }
   const delComment = id => fb.fs.deleteDoc(famDoc('chatRooms', 'news', 'comments', id));
 
   // تعليقات الخبر تُحذف قبله، فالقواعد تتحقق من صاحب الخبر ما دام موجوداً
@@ -528,14 +535,14 @@ const Cloud = (() => {
   }
   // دالة chatPush (functions/index.js) ترسل تنبيه الرسالة لمن تخصّه
   let callPush = null;
-  async function pushFor(f, room, msg) {
+  async function pushFor(f, room, msg, comment) {
     if (!callPush) {
       const fn = await import(SDK + 'firebase-functions.js');
       const fns = fn.getFunctions(fb.app, 'me-central1');
       if (fb.emulator) fn.connectFunctionsEmulator(fns, 'localhost', 5001);
       callPush = fn.httpsCallable(fns, 'chatPush');
     }
-    return callPush({ fid: f, room, msg });
+    return callPush(comment ? { fid: f, room, msg, comment } : { fid: f, room, msg });
   }
   // يوقف التنبيهات على هذا الجهاز فقط (أجهزة الفرد الأخرى تبقى)
   async function disablePush() {
