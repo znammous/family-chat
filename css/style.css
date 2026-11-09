@@ -385,6 +385,16 @@ html[data-look="arnooba"] .modal-bg { background: rgba(120, 60, 110, .45); }
 .v-dur { font-size: 13px; font-weight: 800; color: var(--muted); }
 .recbar { align-items: center; }
 .recbar[hidden], .composer[hidden] { display: none; }
+.composer .mic { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.room.rec-holding { position: relative; }
+.rec-holding .composer:not(.recbar) .field { visibility: hidden; }
+.rec-holding .composer .mic { scale: 1.25; }
+.rec-holding .recbar { position: absolute; inset-inline: 0; bottom: 0; z-index: 3; background: none; box-shadow: none; pointer-events: none; }
+.rec-holding .recbar .ic, .rec-holding .recbar .send { visibility: hidden; }
+.rec-lock { position: fixed; z-index: 4; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 8px 6px; border-radius: 24px; background: #fff; box-shadow: 0 3px 12px rgba(0, 0, 0, .2); pointer-events: none; }
+.rec-lock[hidden] { display: none; }
+.rec-lock i { font-style: normal; font-size: 20px; line-height: 1; }
+.rec-lock b { color: var(--primary); font-size: 18px; line-height: .8; animation: blink 1s infinite; }
 .rec-dot { width: 14px; height: 14px; border-radius: 50%; background: #ff3b5c; animation: blink 1s infinite; flex-shrink: 0; }
 .rec-time { font-size: 20px; color: var(--deep); min-width: 48px; }
 .rec-hint { flex: 1; color: var(--muted); font-weight: 700; font-size: 14px; }

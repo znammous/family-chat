@@ -648,20 +648,21 @@
           <textarea id="txt" rows="1" maxlength="3000" placeholder="اكتب رسالة…"></textarea>
           <button class="ic cam" data-act="photoMenu" data-arg="chat" aria-label="صورة"><i class="e-cam">📷</i></button>
         </div>
-        <button class="send mic" data-act="recStart" aria-label="تسجيل صوت"><i class="e-mic">🎤</i></button>
+        <button class="send mic" id="micBtn" aria-label="تسجيل صوت"><i class="e-mic">🎤</i></button>
         <button class="send txt-send" data-act="sendText" aria-label="إرسال"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 4.5 3.6 11.2c-.8.3-.8 1.4 0 1.7L21 19.5c.6.2 1.1-.4.9-1L19.3 12l2.6-6.5c.2-.6-.3-1.2-.9-1z"/></svg></button>
       </footer>
       <footer class="composer recbar" id="recBar" hidden>
         <button class="ic" data-act="recCancel" aria-label="إلغاء">🗑️</button>
         <span class="rec-dot"></span><b class="rec-time" id="recTime">0:00</b>
-        <span class="rec-hint">جارٍ التسجيل… تكلّم الآن 🎙️</span>
+        <span class="rec-hint" id="recHint">${REC_HINT}</span>
         <button class="send" data-act="recSend" aria-label="إرسال التسجيل"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 4.5 3.6 11.2c-.8.3-.8 1.4 0 1.7L21 19.5c.6.2 1.1-.4.9-1L19.3 12l2.6-6.5c.2-.6-.3-1.2-.9-1z"/></svg></button>
-      </footer>` : ''}
+      </footer>
+      <div class="rec-lock" id="recLock" hidden><i>🔒</i><b>⌃</b></div>` : ''}
     </div>`;
     keepBottom($('msgs'));
     refreshRoom(true);
     paintReply();
-    if (canSend(r)) swipeToReply($('msgs'));
+    if (canSend(r)) { swipeToReply($('msgs')); holdToRecord($('micBtn')); }
     showPanel();
     const t = $('txt');
     if (t) {
@@ -949,6 +950,10 @@
   const REC_MAX = 60;
   let rec = null;      // { mr, stream, chunks, start, timer, cancel }
   let player = null;   // { id, audio }
+  let hold = null;     // ضغطة مطوّلة جارية على زر المايك { btn, id, x, y, timer, live }
+  let recOpening = false;
+  const REC_HINT = 'جارٍ التسجيل… تكلّم الآن 🎙️';
+  const HOLD_MS = 200, LOCK_PX = 70, CANCEL_PX = 110;
   const PLAY_IC = '<svg viewBox="0 0 24 24" fill="#fff"><path d="M8.5 5.2v13.6c0 .8.9 1.3 1.6.8l10-6.8c.6-.4.6-1.2 0-1.6l-10-6.8c-.7-.5-1.6 0-1.6.8z"/></svg>';
   const PAUSE_IC = '<svg viewBox="0 0 24 24" fill="#fff"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg>';
   const fmt = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
@@ -994,11 +999,15 @@
   }
 
   async function recStart() {
-    if (rec) return;
+    if (rec || recOpening) return;
     if (!window.MediaRecorder || !navigator.mediaDevices) { toast('🎤 هذا المتصفح لا يدعم التسجيل'); return; }
     let stream;
+    const openedIn = room;
+    recOpening = true;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
-    catch (e) { toast(e.name === 'NotAllowedError' ? '🎤 اسمح للتطبيق باستخدام الميكروفون من إعدادات المتصفح' : '🎤 تعذّر فتح الميكروفون', 4000); return; }
+    catch (e) { recOpening = false; endHold(); toast(e.name === 'NotAllowedError' ? '🎤 اسمح للتطبيق باستخدام الميكروفون من إعدادات المتصفح' : '🎤 تعذّر فتح الميكروفون', 4000); return; }
+    recOpening = false;
+    if (room !== openedIn) { stream.getTracks().forEach(t => t.stop()); return; }
     const type = recType();
     const mr = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), audioBitsPerSecond: 32000 });
     rec = { mr, stream, chunks: [], start: Date.now(), cancel: false, room };
@@ -1008,8 +1017,9 @@
     if (player) player.audio.pause();
     Sound.tap();
     Native.vibrate(40);
+    $('recTime').textContent = '0:00';
     $('recBar').hidden = false;
-    document.querySelector('.composer:not(.recbar)').hidden = true;
+    if (hold) showHold(); else document.querySelector('.composer:not(.recbar)').hidden = true;
     rec.timer = setInterval(() => {
       const sec = (Date.now() - rec.start) / 1000;
       const t = $('recTime');
@@ -1017,11 +1027,73 @@
       if (sec >= REC_MAX) { toast('⏱️ أقصى مدة دقيقة واحدة'); recStop(false); }
     }, 200);
   }
+  // ضغطة مطوّلة تسجّل والإفلات يرسل، والسحب للأعلى يقفل، وجانباً يلغي
+  function holdToRecord(btn) {
+    if (!btn) return;
+    btn.addEventListener('contextmenu', e => e.preventDefault());
+    btn.addEventListener('click', e => { if (e.detail === 0) recStart(); }); // لوحة المفاتيح وقارئات الشاشة
+    btn.addEventListener('pointerdown', e => {
+      if (hold || rec || recOpening || e.button !== 0) return;
+      try { btn.setPointerCapture(e.pointerId); } catch (err) {}
+      const h = hold = { btn, id: e.pointerId, x: e.clientX, y: e.clientY, live: false, started: false };
+      h.timer = setTimeout(() => { h.started = true; recStart(); }, HOLD_MS);
+    });
+    btn.addEventListener('pointermove', e => {
+      if (!hold || !hold.live || e.pointerId !== hold.id) return;
+      const dx = e.clientX - hold.x, up = Math.max(0, hold.y - e.clientY);
+      if (up >= LOCK_PX) { lockHold(); return; }
+      if (Math.abs(dx) >= CANCEL_PX) { recStop(true); Sound.tap(); Native.vibrate(40); return; }
+      btn.style.translate = Math.abs(dx) > up ? `${dx}px 0` : `0 ${-up}px`;
+    });
+    btn.addEventListener('pointerup', e => {
+      if (!hold || e.pointerId !== hold.id) return;
+      if (hold.live) { recStop(false); return; }
+      // ضغطة قصيرة، أو أفلت قبل أن يجهز الميكروفون: يكمل التسجيل بشريط الإرسال والإلغاء
+      const quick = !hold.started;
+      endHold();
+      if (quick) recStart();
+    });
+    // إن قطع النظام اللمس (مكالمة مثلاً) لا يضيع التسجيل ولا يُرسل دون قصد
+    btn.addEventListener('pointercancel', e => {
+      if (!hold || e.pointerId !== hold.id) return;
+      if (hold.live) lockHold(); else endHold();
+    });
+  }
+  function showHold() {
+    hold.live = true;
+    document.querySelector('.room').classList.add('rec-holding');
+    $('recHint').textContent = '⬆️ للقفل  ·  ↔️ للإلغاء';
+    const r = hold.btn.getBoundingClientRect(), lock = $('recLock');
+    lock.style.left = `${r.left + r.width / 2}px`;
+    lock.style.bottom = `${innerHeight - r.top + 12}px`;
+    lock.hidden = false;
+  }
+  function endHold() {
+    if (!hold) return;
+    const h = hold;
+    hold = null;
+    clearTimeout(h.timer);
+    h.btn.style.translate = '';
+    const box = document.querySelector('.room'), lock = $('recLock'), hint = $('recHint');
+    if (box) box.classList.remove('rec-holding');
+    if (lock) lock.hidden = true;
+    if (hint) hint.textContent = REC_HINT;
+  }
+  function lockHold() {
+    endHold();
+    document.querySelector('.composer:not(.recbar)').hidden = true;
+    Native.vibrate(40);
+    Sound.tap();
+  }
   function recStop(cancel) {
+    endHold();
     if (!rec) return;
     rec.cancel = cancel;
     clearInterval(rec.timer);
     if (rec.mr.state !== 'inactive') rec.mr.stop(); else finishRec();
+    recBarOff();
+  }
+  function recBarOff() {
     const bar = $('recBar'), main = document.querySelector('.composer:not(.recbar)');
     if (bar) bar.hidden = true;
     if (main) main.hidden = false;
@@ -1030,6 +1102,10 @@
     const r = rec;
     rec = null;
     if (!r) return;
+    // قد يتوقف المسجّل وحده إن انقطع الميكروفون، فلا يبقى الشريط عالقاً
+    clearInterval(r.timer);
+    endHold();
+    recBarOff();
     r.stream.getTracks().forEach(t => t.stop());
     const dur = Math.round((Date.now() - r.start) / 100) / 10;
     if (r.cancel) return;
@@ -1579,7 +1655,6 @@
       setTimeout(() => el.classList.remove('flash'), 1400);
     },
     photoMenu(kind) { photoMenu(kind); },
-    recStart() { recStart(); },
     recSend() { recStop(false); },
     recCancel() { recStop(true); Sound.tap(); },
     playVoice(arg) { playVoice(arg); },
@@ -1838,11 +1913,20 @@
   });
 
   // زر الرجوع في الجوال يغلق المحادثة بدل الخروج من التطبيق
+  const closeTopLayer = () => {
+    if (Draw.active()) { Draw.cancel(); return true; }
+    if (!$('modal').hidden) { closeModal(); return true; }
+    return false;
+  };
   window.addEventListener('popstate', () => {
-    if (Draw.active()) { Draw.cancel(); if (room) history.pushState({ room }, ''); return; }
-    if (!$('modal').hidden) { closeModal(); if (room) history.pushState({ room }, ''); return; }
+    if (closeTopLayer()) { if (room) history.pushState({ room }, ''); return; }
     if (room) closeRoom();
     else if (peek) { peek = null; render(); }
+  });
+  // في التطبيق نغلق النافذة دون لمس سجل الرجوع: إعادة خطوة أُضيفت بلا لمسة تجعل WebView يتجاهل الرجوع بعدها
+  Native.onBack(canGoBack => {
+    if (closeTopLayer()) return;
+    if (room || peek || canGoBack) history.back();
   });
 
   // رابط QR مسحته كاميرا الجهاز مباشرة: نفتح شاشة الانضمام والرمز مكتوب فيها
