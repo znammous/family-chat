@@ -1,0 +1,61 @@
+# حزمة التحديث الحي: كل تعديل على الصفحة يُنشر إصداراً (web-<بصمة>) في Releases،
+# فيراه تطبيق أندرويد عند فتحه وينزّله بصمت. البصمة من المحتوى، فما لم يتغيّر لا يُنشر مرتين.
+name: حزمة التحديث
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - manifest.webmanifest
+      - css/**
+      - js/**
+      - fonts/**
+      - icons/**
+      - scripts/build-www.mjs
+      - package.json
+
+permissions:
+  contents: write
+
+concurrency:
+  group: web-bundle
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: تجميع الصفحة
+        id: www
+        run: |
+          node scripts/build-www.mjs
+          echo "id=$(node -p "require('./www/bundle.json').id")" >> "$GITHUB_OUTPUT"
+          echo "min=$(node -p "(require('./package.json').liveUpdate||{}).minBuild||1")" >> "$GITHUB_OUTPUT"
+
+      - name: النشر
+        run: |
+          TAG="web-${{ steps.www.outputs.id }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "الحزمة $TAG منشورة من قبل"; exit 0
+          fi
+          (cd www && zip -qr ../web.zip .)
+          SHA=$(sha256sum web.zip | cut -d' ' -f1)
+          # الوصف JSON يقرؤه التطبيق: البصمة وبصمة الملف وأدنى بناء
+          NOTES=$(node -e 'console.log(JSON.stringify({ id: process.argv[1], sha256: process.argv[2], minBuild: +process.argv[3] }))' "${{ steps.www.outputs.id }}" "$SHA" "${{ steps.www.outputs.min }}")
+          gh release create "$TAG" web.zip --title "تحديث الصفحة ${{ steps.www.outputs.id }}" --notes "$NOTES" --latest
+
+      - name: حذف القديم
+        run: |
+          gh release list --limit 100 --json tagName,createdAt \
+            -q '[.[] | select(.tagName | startswith("web-"))] | sort_by(.createdAt) | reverse | .[3:] | .[].tagName' |
+          while read -r t; do gh release delete "$t" --yes --cleanup-tag; done

@@ -223,6 +223,9 @@
   let installPrompt = null;
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
   window.addEventListener('appinstalled', () => { installPrompt = null; toast('✅ ثُبّت التطبيق، تجده في الشاشة الرئيسية'); });
+  // تحميل تطبيق أندرويد لمن يدخل من المتصفح (لا معنى له داخل التطبيق ولا على الآيفون)
+  const APK_URL = 'https://github.com/znammous/family-chat/releases/download/apk/family-chat.apk';
+  const apkBtn = () => (Native.on || /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent)) ? '' : `<a class="btn plain wide" href="${APK_URL}">🤖 تحميل تطبيق أندرويد (APK)</a>`);
   const installBtn = cls => (standalone() || Native.on ? '' : `<button class="${cls}" data-act="installApp">📲 تثبيت التطبيق</button>`);
 
   function showJoin() {
@@ -434,6 +437,7 @@
       ${isParent() ? `<div class="setting"><span>💌 الرسائل الخاصة بين الأفراد<small class="muted">${Cloud.dmOff() ? 'متوقفة: يراسلونك أنت فقط' : 'مسموحة للجميع'}</small></span><button class="switch ${Cloud.dmOff() ? '' : 'on'}" data-act="toggleDm"><i></i></button></div>
       <p class="muted small" dir="ltr">${esc(Cloud.email())}</p>` : ''}
       ${installBtn('btn plain wide')}
+      ${apkBtn()}
       <a class="btn plain wide" href="${HEROES}">🌟 عالم الأبطال: ألعاب العائلة</a>
       <button class="link-btn danger" data-act="signOut">${Cloud.owner() ? 'تسجيل الخروج من هذا الجهاز' : 'فصل هذا الجهاز عن مجلس العائلة'}</button></div>`;
     return h;
