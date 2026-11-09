@@ -1,0 +1,24 @@
+{
+  "appId": "io.github.znammous.familychat",
+  "appName": "مجلس العائلة",
+  "webDir": "www",
+  "backgroundColor": "#cfeeff",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "LIGHT"
+    },
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    },
+    "LiveUpdate": {
+      "autoUpdateStrategy": "none",
+      "readyTimeout": 10000,
+      "autoDeleteBundles": true,
+      "autoBlockRolledBackBundles": true
+    }
+  }
+}

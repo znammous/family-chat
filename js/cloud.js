@@ -134,7 +134,12 @@ const Cloud = (() => {
     return null;
   }
 
-  function signIn() {
+  async function signIn() {
+    // Google تمنع الدخول من داخل WebView: في التطبيق يتم الدخول بنافذة النظام ونمرّر نتيجته إلى Firebase
+    if (Native.on) {
+      const r = await Native.plugin('FirebaseAuthentication').signInWithGoogle({ skipNativeAuth: true });
+      return fb.auth.signInWithCredential(fb.authI, fb.auth.GoogleAuthProvider.credential(r.credential.idToken));
+    }
     const provider = new fb.auth.GoogleAuthProvider();
     return fb.auth.signInWithPopup(fb.authI, provider).catch(e => {
       if (e.code === 'auth/popup-blocked') return fb.auth.signInWithRedirect(fb.authI, provider);
@@ -147,6 +152,7 @@ const Cloud = (() => {
   // الجهاز يخرج من المجلس: يبقى مرتبطاً بالألعاب إن كان مرتبطاً بها
   async function signOut() {
     await disablePush().catch(() => {});
+    if (Native.on) await Native.plugin('FirebaseAuthentication').signOut().catch(() => {});
     if (user && user.isAnonymous && fid) {
       // يبقى ملفه في المجلس معلَّماً بالفصل، ليعيد ولي الأمر ربطه لاحقاً بنفس الهوية
       if (users[user.uid]) await fb.fs.updateDoc(famDoc('chatUsers', user.uid), { left: Date.now() }).catch(() => {});
@@ -350,22 +356,31 @@ const Cloud = (() => {
   // تنبيهاً عند كل رسالة جديدة تخصّه، فيصل حتى لو كان التطبيق مغلقاً
   const VAPID = 'BBER1o4mIwGYEgSDgR7xph8zP09AW3kV6ZQdSfW5KV2o3ACLfncLKoYeUjulre-ATJiMMyphZFQCdt7pcPjm2r8';
   const PUSH_KEY = 'family-chat-push';
-  const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window;
-  const b64 = s => Uint8Array.from(atob((s + '='.repeat((4 - s.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-  async function enablePush() {
-    if (!pushSupported() || !fid || !user) return false;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = (await reg.pushManager.getSubscription())
-      || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) });
-    const j = sub.toJSON();
-    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(j.endpoint));
+  const pushSupported = () => Native.on || ('serviceWorker' in navigator && 'PushManager' in window);
+  // يحفظ عنوان الجهاز، ويحذف عنوانه السابق إن تغيّر
+  async function savePushEntry(id, entry) {
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(id));
     const key = Array.from(new Uint8Array(hash).slice(0, 8), b => b.toString(16).padStart(2, '0')).join('');
     const old = ls.get(PUSH_KEY);
-    const entry = { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth }, at: Date.now() };
     const subs = { [key]: entry };
     if (old && old !== key) subs[old] = fb.fs.deleteField();
     await fb.fs.setDoc(famDoc('chatPush', user.uid), { subs }, { merge: true });
     ls.set(PUSH_KEY, key);
+  }
+  const b64 = s => Uint8Array.from(atob((s + '='.repeat((4 - s.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  async function enablePush() {
+    if (!pushSupported() || !fid || !user) return false;
+    if (Native.on) {
+      const token = await Native.pushToken();
+      if (!token) return false;
+      await savePushEntry(token, { fcm: token, at: Date.now() });
+      return true;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription())
+      || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) });
+    const j = sub.toJSON();
+    await savePushEntry(j.endpoint, { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth }, at: Date.now() });
     return true;
   }
   // دالة chatPush (functions/index.js) ترسل تنبيه الرسالة لمن تخصّه
@@ -384,6 +399,7 @@ const Cloud = (() => {
     const key = ls.get(PUSH_KEY);
     ls.set(PUSH_KEY, null);
     if (key && fid && user) await fb.fs.updateDoc(famDoc('chatPush', user.uid), { ['subs.' + key]: fb.fs.deleteField() }).catch(() => {});
+    if (Native.on) return Native.pushOff();
     if (pushSupported()) {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();

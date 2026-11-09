@@ -1,11 +1,13 @@
 // تنبيهات مجلس العائلة: بعد أن يرفع الجهاز رسالته يطلب chatPush، فنرسل تنبيه Web Push إلى أجهزة
 // من تخصّهم الرسالة، فيصلهم التنبيه حتى لو كان التطبيق مغلقاً.
 // (لا نستخدم مشغّل Firestore لأن قاعدة البيانات في me-central2 ولا تسمح Google بإنشاء المشغّلات هناك)
-// عناوين التنبيهات يحفظها كل جهاز في families/{fid}/chatPush/{uid}.subs = { مفتاح: { endpoint, keys, at } }
+// عناوين التنبيهات يحفظها كل جهاز في families/{fid}/chatPush/{uid}.subs:
+// المتصفح { endpoint, keys, at } عبر Web Push، وتطبيق أندرويد { fcm, at } عبر FCM
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getMessaging } = require('firebase-admin/messaging');
 const webpush = require('web-push');
 
 initializeApp();
@@ -46,6 +48,17 @@ function preview(m) {
 
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 
+// تنبيه تطبيق أندرويد: قناة chat_messages (MainActivity) تحدد الأولوية والصوت والاهتزاز
+function sendFcm(token, n) {
+  return getMessaging().send({
+    token,
+    notification: { title: n.title, body: n.body },
+    data: { room: n.room },
+    android: { priority: 'high', ttl: 24 * 3600 * 1000, notification: { channelId: 'chat_messages', tag: n.room, sound: 'default', defaultVibrateTimings: true } },
+  });
+}
+const FCM_GONE = ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token'];
+
 exports.chatPush = onCall(
   { region: 'me-central1', secrets: [VAPID_PRIVATE], memory: '256MiB' },
   async req => {
@@ -81,11 +94,8 @@ exports.chatPush = onCall(
     if (!to.length) return { sent: 0 };
 
     const name = p.nameOf(m.from);
-    const payload = JSON.stringify({
-      title: title || name,
-      body: `${name}: ${preview(m)}`,
-      room,
-    });
+    const note = { title: title || name, body: `${name}: ${preview(m)}`, room };
+    const payload = JSON.stringify(note);
 
     webpush.setVapidDetails('https://znammous.github.io/family-chat/', VAPID_PUBLIC, VAPID_PRIVATE.value().trim());
     const docs = await db.getAll(...to.map(u => fam.collection('chatPush').doc(u.id)));
@@ -94,12 +104,14 @@ exports.chatPush = onCall(
       const subs = d.data().subs || {};
       const dead = [];
       await Promise.all(Object.entries(subs).map(([k, s]) =>
-        webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload, { TTL: 24 * 3600, urgency: 'high', topic: room.slice(0, 32).replace(/[^A-Za-z0-9_-]/g, '') })
+        (s.fcm
+          ? sendFcm(s.fcm, note)
+          : webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload, { TTL: 24 * 3600, urgency: 'high', topic: room.slice(0, 32).replace(/[^A-Za-z0-9_-]/g, '') }))
           .then(() => { sent++; })
           .catch(e => {
             // الجهاز ألغى التنبيهات أو انتهى عنوانه: نحذفه
-            if (e.statusCode === 404 || e.statusCode === 410) dead.push(k);
-            else console.warn('push failed', e.statusCode || '', e.body || e.message);
+            if (e.statusCode === 404 || e.statusCode === 410 || FCM_GONE.includes(e.code)) dead.push(k);
+            else console.warn('push failed', e.statusCode || e.code || '', e.body || e.message);
           })));
       if (dead.length) await d.ref.update(Object.fromEntries(dead.map(k => ['subs.' + k, FieldValue.delete()])));
     }));

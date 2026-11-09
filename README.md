@@ -54,3 +54,13 @@ firebase deploy --only functions --project tablehero-d582b
 محاكيات Firebase (تحتاج Java 21): `firebase emulators:start --only auth,firestore` بمنفذ Firestore ‏8085، ثم افتح `http://localhost:PORT/?emulator`.
 
 الخط Baloo Bhaijaan 2 برخصة OFL (`fonts/OFL.txt`).
+
+## تطبيق أندرويد (APK)
+
+غلاف Capacitor حول الصفحة نفسها، للاستخدام الداخلي. معرّفه `io.github.znammous.familychat`.
+
+- **تحديث الصفحة:** كل push يمس ملفات الصفحة ينشر حزمة في Releases عبر `.github/workflows/web-bundle.yml`، فينزّلها التطبيق بصمت وتعمل في الفتحة التالية. لا يحتاج APK جديداً.
+- **APK جديد** يلزم فقط عند تغيير الجزء الأصلي (إضافة أو إذن): ارفع `liveUpdate.build` في `package.json`، واجعل `liveUpdate.minBuild` مساوياً له إن كانت الصفحة تعتمد على هذا التغيير، ثم:
+  `npm run sync && cd android && JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./gradlew assembleRelease`
+- **مفتاح التوقيع** في `~/family-chat-keys/` خارج المستودع. لا بد أن يبقى نفسه، وإلا رفض الجهاز تثبيت أي APK لاحق فوق القديم.
+- **التنبيهات:** FCM عبر دالة `chatPush` وقناة `chat_messages` (الأولوية والاهتزاز) في `MainActivity`.

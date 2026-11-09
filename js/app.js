@@ -223,7 +223,7 @@
   let installPrompt = null;
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
   window.addEventListener('appinstalled', () => { installPrompt = null; toast('✅ ثُبّت التطبيق، تجده في الشاشة الرئيسية'); });
-  const installBtn = cls => (standalone() ? '' : `<button class="${cls}" data-act="installApp">📲 تثبيت التطبيق</button>`);
+  const installBtn = cls => (standalone() || Native.on ? '' : `<button class="${cls}" data-act="installApp">📲 تثبيت التطبيق</button>`);
 
   function showJoin() {
     app.innerHTML = `<div class="center-screen">
@@ -430,6 +430,7 @@
     h += `<div class="card"><h3>⚙️ الإعدادات</h3>
       <div class="setting"><span>🔔 تنبيه عند وصول رسالة</span><button class="switch ${notifyOn() ? 'on' : ''}" data-act="toggleNotify"><i></i></button></div>
       <div class="setting"><span>🔊 الأصوات</span><button class="switch ${ls.get('family-chat-muted', false) ? '' : 'on'}" data-act="toggleMute"><i></i></button></div>
+      ${Native.on ? '<div class="setting"><span>🔄 تحديث التطبيق<small class="muted">يصل تلقائياً ويعمل عند الفتح التالي</small></span><button class="btn small blue" data-act="checkUpdate">تحقق الآن</button></div>' : ''}
       ${isParent() ? `<div class="setting"><span>💌 الرسائل الخاصة بين الأفراد<small class="muted">${Cloud.dmOff() ? 'متوقفة: يراسلونك أنت فقط' : 'مسموحة للجميع'}</small></span><button class="switch ${Cloud.dmOff() ? '' : 'on'}" data-act="toggleDm"><i></i></button></div>
       <p class="muted small" dir="ltr">${esc(Cloud.email())}</p>` : ''}
       ${installBtn('btn plain wide')}
@@ -475,7 +476,7 @@
   function addMemberBox() {
     if (pairing && pairing.exp > Date.now()) {
       const qr = qrcode(0, 'M');
-      qr.addData(`${location.origin}${location.pathname}#join=${pairing.code}`);
+      qr.addData(`${Native.on ? Native.WEB_URL : location.origin + location.pathname}#join=${pairing.code}`);
       qr.make();
       return `<div class="card pair-box ${pairing.ready ? '' : 'pending'}">
         <h3>${pairing.relink ? `🔁 إعادة ربط ${esc(pairing.name)}` : `📱 أضف ${esc(pairing.name || 'فرداً')}`}</h3>
@@ -708,7 +709,7 @@
       const go = s.lock === 'x' && Math.abs(s.dx) > 55;
       const msg = s.b.closest('.msg');
       reset();
-      if (go && msg) { actions.reply(msg.dataset.id); if (navigator.vibrate) navigator.vibrate(20); }
+      if (go && msg) { actions.reply(msg.dataset.id); Native.vibrate(20); }
     });
     box.addEventListener('touchcancel', reset);
   }
@@ -860,7 +861,7 @@
     mr.start(250);
     if (player) player.audio.pause();
     Sound.tap();
-    if (navigator.vibrate) navigator.vibrate(40);
+    Native.vibrate(40);
     $('recBar').hidden = false;
     document.querySelector('.composer:not(.recbar)').hidden = true;
     rec.timer = setInterval(() => {
@@ -1182,19 +1183,21 @@
   }
 
   // ───── التنبيهات ─────
-  const notifyOn = () => ls.get('family-chat-notify', false) && 'Notification' in window && Notification.permission === 'granted';
+  const notifyOn = () => ls.get('family-chat-notify', false) && (Native.on || ('Notification' in window && Notification.permission === 'granted'));
   function alertNew(r, fresh) {
     const incoming = fresh.filter(m => !isMe(m.from) && !m.pending && Date.now() - m.at < 120000);
     if (!incoming.length || !canWrite(r)) return;
     const visibleHere = room === r && document.visibilityState === 'visible';
-    if (visibleHere) { Sound.tap(); return; }
+    // التطبيق في الخلفية: تنبيه النظام (FCM) يتولى الصوت والاهتزاز
+    if (Native.on && document.visibilityState !== 'visible') return;
+    if (visibleHere) { Sound.tap(); if (Native.on) Native.vibrate(40); return; }
     Sound.pop();
-    if (navigator.vibrate) navigator.vibrate(60);
+    Native.vibrate(60);
     const m = incoming[incoming.length - 1];
     const text = `${nameOf(m.from)}: ${m.sticker ? '✨ ملصق' : m.audio ? '🎤 رسالة صوتية' : m.img ? '📷 صورة' : (m.title || m.text || '').slice(0, 80)}`;
     if (document.visibilityState === 'visible') toast(`💌 ${roomTitle(r) === nameOf(m.from) ? '' : roomTitle(r) + ' · '}${text}`);
     // التنبيه يصل من الخادم (Web Push) إن كان مفعّلاً، فلا نكرّره من هنا
-    else if (notifyOn() && !Cloud.pushOn() && navigator.serviceWorker) {
+    else if (notifyOn() && !Cloud.pushOn() && !Native.on && navigator.serviceWorker) {
       navigator.serviceWorker.ready.then(reg => reg.showNotification(roomTitle(r), {
         body: text, icon: 'icons/icon-192.png', badge: 'icons/badge.png', tag: r, lang: 'ar', dir: 'rtl', data: { room: r },
       })).catch(() => {});
@@ -1411,7 +1414,7 @@
       const [r, id] = arg.split('|');
       const m = findMsg(r, id);
       if (!m || !m.img) return;
-      modal(`<div class="viewer" data-act="closeModal"><img src="${m.img}" alt=""><a class="btn plain small" href="${m.img}" download="family-photo.jpg">⬇️ حفظ الصورة</a></div>`);
+      modal(`<div class="viewer" data-act="closeModal"><img src="${m.img}" alt="">${Native.on ? `<button class="btn plain small" data-act="saveImage" data-arg="${arg}">⬇️ حفظ الصورة</button>` : `<a class="btn plain small" href="${m.img}" download="family-photo.jpg">⬇️ حفظ الصورة</a>`}</div>`);
     },
     closeModal() { closeModal(); },
 
@@ -1494,6 +1497,14 @@
 
     toggleNotify() {
       if (notifyOn()) { ls.set('family-chat-notify', false); Cloud.disablePush().catch(() => {}); render(); return; }
+      if (Native.on) {
+        Cloud.enablePush().then(ok => {
+          ls.set('family-chat-notify', !!ok);
+          toast(ok ? '🔔 ستصلك التنبيهات حتى والمجلس مغلق' : '🔕 اسمح لمجلس العائلة بالتنبيهات من إعدادات الجهاز', ok ? 2500 : 5000);
+          render();
+        }).catch(() => toast('⚠️ تعذّر تفعيل التنبيهات، تأكد من الإنترنت وأعد المحاولة'));
+        return;
+      }
       // على الآيفون لا تعمل التنبيهات إلا بعد تثبيت المجلس على الشاشة الرئيسية
       if (!('Notification' in window) || !Cloud.pushSupported()) {
         toast(/iPhone|iPad|iPod/.test(navigator.userAgent) ? '📲 ثبّت المجلس على الشاشة الرئيسية أولاً، ثم فعّل التنبيهات من داخله' : 'هذا المتصفح لا يدعم التنبيهات', 5000);
@@ -1506,6 +1517,18 @@
           .catch(() => toast('⚠️ تعذّر تفعيل التنبيهات والمجلس مغلق، ستصلك وهو مفتوح فقط'));
         render();
       });
+    },
+    checkUpdate() {
+      toast('⏳ جارٍ التحقق…');
+      Native.updateNow().then(st => {
+        if (st === 'none') toast('✅ عندك أحدث إصدار');
+        else if (st === 'apk') toast('يوجد إصدار جديد يحتاج تثبيت ملف APK جديد', 5000);
+      }).catch(() => toast('⚠️ تعذّر التحقق، تأكد من الإنترنت'));
+    },
+    saveImage(arg) {
+      const [r, id] = arg.split('|');
+      const m = findMsg(r, id);
+      if (m && m.img) Native.saveImage(m.img).catch(() => toast('⚠️ تعذّر حفظ الصورة'));
     },
     toggleMute() { ls.set('family-chat-muted', !ls.get('family-chat-muted', false)); render(); },
     signOut() {
@@ -1583,7 +1606,13 @@
       }
       if (Cloud.me()) {
         // نجدّد عنوان التنبيهات مرة في كل فتح، فقد يغيّره المتصفح
-        if (!pushChecked && notifyOn()) { pushChecked = true; Cloud.enablePush().catch(() => {}); }
+        if (!pushChecked && notifyOn()) {
+          pushChecked = true;
+          // في التطبيق قد يسحب صاحب الجهاز الإذن من إعداداته
+          Cloud.enablePush().then(ok => { if (Native.on && !ok) { ls.set('family-chat-notify', false); render(); } }).catch(() => {});
+        }
+        // أول فتح للتطبيق: نطلب إذن التنبيهات مباشرة
+        if (Native.on && !pushChecked && ls.get('family-chat-notify', null) === null) { pushChecked = true; actions.toggleNotify(); }
         // الضغط على تنبيه والمجلس مغلق يفتحه على ?room=المحادثة
         tryStartRoom();
         if (Cloud.me().look && !ls.get('family-chat-look', null)) { look = Cloud.me().look; ls.set('family-chat-look', look); }
@@ -1624,8 +1653,11 @@
     });
   }
 
+  Native.onRoom(r => { if (r !== room) { startRoom = r; tryStartRoom(); } });
+
   paintLook();
   joinFromHash();
   render();
   Cloud.start();
+  Native.start();
 })();

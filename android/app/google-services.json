@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1035331862918",
+    "project_id": "tablehero-d582b",
+    "storage_bucket": "tablehero-d582b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1035331862918:android:fbcec2e1d9b81edda96c07",
+        "android_client_info": {
+          "package_name": "io.github.znammous.familychat"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1035331862918-0oskd5ah88s9bssio4kog86jsm16vquf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "io.github.znammous.familychat",
+            "certificate_hash": "59e9c14d2b3d6fcaaea2e863f29f764fa7c4e57c"
+          }
+        },
+        {
+          "client_id": "1035331862918-32pubol6if0pggqekjb3jfpb4pkk20um.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDBIF2Ln2OOe6EHa5WMH775I1eucBvwNZg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1035331862918-32pubol6if0pggqekjb3jfpb4pkk20um.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

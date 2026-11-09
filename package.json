@@ -1,0 +1,29 @@
+{
+  "name": "family-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "مجلس العائلة — تغليف الصفحة تطبيق أندرويد (Capacitor)",
+  "scripts": {
+    "www": "node scripts/build-www.mjs",
+    "sync": "node scripts/build-www.mjs && npx cap sync android"
+  },
+  "liveUpdate": {
+    "build": 1,
+    "minBuild": 1
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0"
+  },
+  "dependencies": {
+    "@capacitor-firebase/authentication": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/share": "^8.0.3",
+    "@capawesome/capacitor-live-update": "^8.8.1",
+    "firebase": "^12.19.0"
+  }
+}

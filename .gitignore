@@ -1,1 +1,9 @@
 .DS_Store
+
+# التطبيق الأصلي: ما يُبنى ويُنزَّل لا يُرفع
+node_modules/
+www/
+dist/
+*.keystore
+*.jks
+keystore.properties
