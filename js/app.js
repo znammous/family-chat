@@ -1235,7 +1235,7 @@
     const box = $('camFrame');
     if (!box || !cam) return;
     const f = currentFrame();
-    box.innerHTML = f ? Art.char(f.who, f.mood) : '';
+    box.innerHTML = f ? Art.sticker(`${f.id}:${f.mood}`) : '';
     const id = f ? f.id : '';
     document.querySelectorAll('.cam-frames .chip').forEach(b => b.classList.toggle('on', b.dataset.arg === id));
     // شريط ملصقات الشخصية المختارة: يُبنى عند تغيّر الشخصية فقط حتى لا يضيع موضع التمرير
@@ -1267,7 +1267,24 @@
     const fimg = await frameImage(currentFrame());
     if (fimg) {
       const fh = Math.min(w, h) * 0.42, fw = fh * 0.8;
-      ctx.drawImage(fimg, w * 0.03, h - fh - h * 0.02, fw, fh);
+      // كتابة الملصق في شريط أبيض تحت الشخصية كما يظهر في المعاينة
+      const label = Art.MOOD_NAMES[currentFrame().mood] || '';
+      const size = Math.round(fh * 0.1), pillH = size * 1.6;
+      const fx = w * 0.03, pillY = h - pillH - h * 0.02;
+      ctx.drawImage(fimg, fx, pillY - fh + pillH * 0.25, fw, fh);
+      ctx.font = `700 ${size}px "Baloo Bhaijaan 2", system-ui, sans-serif`;
+      ctx.direction = 'rtl';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const pillW = ctx.measureText(label).width + size * 1.6;
+      const cx = Math.max(fx + fw / 2, w * 0.01 + pillW / 2);
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(cx - pillW / 2, pillY, pillW, pillH, pillH / 2);
+      else ctx.rect(cx - pillW / 2, pillY, pillW, pillH); // متصفحات قديمة
+      ctx.fill();
+      ctx.fillStyle = '#17623a';
+      ctx.fillText(label, cx, pillY + pillH / 2);
     }
     Sound.pop();
     const flash = document.createElement('div');
