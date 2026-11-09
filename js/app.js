@@ -463,7 +463,7 @@
       <h3>${d.edit ? '✏️ تعديل الخبر' : '📣 خبر جديد'}</h3>
       <input id="newsTitle" class="text-in" maxlength="120" placeholder="عنوان الخبر (مثال: نجحت بامتياز! 🎉)" value="${esc(d.title || '')}">
       <textarea id="newsText" class="text-in" rows="4" maxlength="3000" placeholder="اكتب التفاصيل…">${esc(d.text || '')}</textarea>
-      ${d.img ? `<img class="news-img" src="${d.img}" alt=""><button class="link-btn danger" data-act="newsNoImg">إزالة الصورة</button>`
+      ${d.img ? `<img class="news-img" src="${d.img}" alt=""><div class="row"><button class="btn blue" data-act="imgDraw" data-arg="news">✏️ تعديل</button><button class="link-btn danger" data-act="newsNoImg">إزالة الصورة</button></div>`
         : `<div class="row"><button class="btn blue" data-act="camera" data-arg="news">📸 صوّر</button><label class="btn blue">🖼️ من الألبوم<input type="file" accept="image/*" hidden data-pick="news"></label></div>`}
       <div class="row"><button class="btn green" data-act="newsPost">${d.edit ? 'حفظ ✅' : 'انشر الخبر 🚀'}</button><button class="btn plain" data-act="closeModal">إلغاء</button></div>
     </div>`);
@@ -1080,6 +1080,7 @@
       modal(`<div class="sheet"><h3>📷 إرسال صورة</h3><img class="news-img" src="${data}" alt="">
         <input id="imgCap" class="text-in" maxlength="500" placeholder="اكتب تعليقاً (اختياري)">
         <div class="row"><button class="btn green" data-act="sendImg">أرسل 🚀</button>
+        <button class="btn blue" data-act="imgDraw" data-arg="chat">✏️ تعديل</button>
         ${fromCam ? '<button class="btn blue" data-act="camera" data-arg="chat">📸 أعد التصوير</button>' : ''}
         <button class="btn plain" data-act="closeModal">إلغاء</button></div></div>`);
     } else {
@@ -1109,6 +1110,7 @@
     return it ? it.getAsFile() : null;
   }
   function pasteKind() {
+    if (Draw.active()) return null;
     const m = $('modal');
     if (m && !m.hidden) return m.querySelector('[data-pick="news"], [data-act="newsNoImg"]') ? 'news' : null;
     return room && $('txt') ? 'chat' : null;
@@ -1496,6 +1498,17 @@
       stick = true;
       toBottom();
     },
+    // الرسم على الصورة قبل مشاركتها: يفتح فوق النافذة فيبقى التعليق ومسودة الخبر كما هما
+    imgDraw(kind) {
+      const holder = kind === 'chat' ? pendingImg : newsDraft;
+      const key = kind === 'chat' ? 'data' : 'img';
+      if (!holder || !holder[key]) return;
+      Draw.open(holder[key], canvas => {
+        holder[key] = shrink(canvas, canvas.width, canvas.height);
+        const shown = $('modal').querySelector('.news-img');
+        if (shown) shown.src = holder[key];
+      }, () => toast('⚠️ تعذّر فتح الصورة للرسم عليها'));
+    },
     sendImg() {
       if (!pendingImg) return;
       const cap = ($('imgCap').value || '').trim();
@@ -1780,6 +1793,7 @@
 
   // زر الرجوع في الجوال يغلق المحادثة بدل الخروج من التطبيق
   window.addEventListener('popstate', () => {
+    if (Draw.active()) { Draw.cancel(); if (room) history.pushState({ room }, ''); return; }
     if (!$('modal').hidden) { closeModal(); if (room) history.pushState({ room }, ''); return; }
     if (room) closeRoom();
     else if (peek) { peek = null; render(); }
