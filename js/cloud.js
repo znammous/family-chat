@@ -69,7 +69,7 @@ const Cloud = (() => {
     if (cfgUnsub) { cfgUnsub(); cfgUnsub = null; }
     if (guardianUnsub) { guardianUnsub(); guardianUnsub = null; }
     if (guardiansUnsub) { guardiansUnsub(); guardiansUnsub = null; }
-    config = {}; guardian = false; guardians = {};
+    config = {}; guardian = false; guardians = {}; marked = {}; markQ = null;
     Object.keys(rooms).forEach(r => { if (rooms[r].unsub) rooms[r].unsub(); delete rooms[r]; });
     users = {}; usersReady = false; memberData = null;
   }
@@ -256,8 +256,26 @@ const Cloud = (() => {
   function saveProfile(p) {
     const data = { name: p.name.slice(0, 30), avatar: p.avatar, role: p.role, look: p.look, seen: Date.now(), at: (me() && me().at) || Date.now() };
     if (me() && me().root) data.root = me().root;
+    if (me() && me().marks) data.marks = me().marks;
     return fb.fs.setDoc(famDoc('chatUsers', user.uid), data);
   }
+  // علامات الصحّين: marks.{غرفة} = { d: وقت آخر رسالة وصلت جهازه، r: وقت آخر رسالة قرأها }
+  // نجمع الكتابات القريبة في كتابة واحدة، ولا نكرر نفس القيمة حتى لو رُفضت
+  let marked = {}, markQ = null;
+  function mark(room, kind, at) {
+    const k = room + '|' + kind, mine = me();
+    const had = (mine && mine.marks && mine.marks[room] && mine.marks[room][kind]) || 0;
+    if (!at || !mine || at <= Math.max(marked[k] || 0, had)) return;
+    marked[k] = at;
+    if (!markQ) { markQ = {}; setTimeout(flushMarks, 400); }
+    markQ[`marks.${room}.${kind}`] = at;
+  }
+  function flushMarks() {
+    const q = markQ;
+    markQ = null;
+    if (q && fid && me()) fb.fs.updateDoc(famDoc('chatUsers', user.uid), q).catch(() => {});
+  }
+
   let lastBeat = 0;
   function beat() {
     if (!fid || !users[user.uid] || Date.now() - lastBeat < 45000) return;
@@ -410,7 +428,7 @@ const Cloud = (() => {
   const me = () => (user ? users[user.uid] : null);
 
   return {
-    start, signIn, signOut, join, createCode, saveProfile, beat, removeMember, forget, setDmOff, grant, revoke,
+    start, signIn, signOut, join, createCode, saveProfile, beat, mark, removeMember, forget, setDmOff, grant, revoke,
     groups, addGroup, renameGroup, removeGroup,
     watch, msgsOf, send, react, edit, remove,
     pushSupported, enablePush, disablePush, pushOn: () => !!ls.get(PUSH_KEY),

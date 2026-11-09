@@ -21,6 +21,11 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/families/$(fid)/members/$(request.auth.uid));
     }
 
+    // جهاز طفل مرتبط بجدول الأبطال: معرّف طفله، أو * لجهاز مشترك، أو '' إن لم يكن جهاز طفل هنا
+    function tableKid(fid) {
+      return get(/databases/$(database)/documents/families/$(fid)/members/$(request.auth.uid)).data.get('apps', {}).get('tableHero', '');
+    }
+
     function pairCode(code) {
       return get(/databases/$(database)/documents/pairCodes/$(code)).data;
     }
@@ -34,6 +39,25 @@ service cloud.firestore {
       // أجهزة الأطفال تصل إلى بيانات أبطال الغابة وأبطال الإملاء فقط
       match /apps/{app} {
         allow read, write: if app in ['jungleHero', 'jungleDuel', 'jungleOnline', 'spellingHero', 'spellingDuel', 'spellingOnline'] && isMember(fid);
+      }
+
+      // جدول الأبطال: جهاز الطفل يقرأ نسخة عامة بلا رمز ولي الأمر يكتبها ولي الأمر (بالقاعدة العامة)
+      match /apps/tableHero {
+        allow read: if isMember(fid) && tableKid(fid) != '';
+      }
+      // ويقرأ التسجيلات ويضيف تسجيلاً بانتظار الموافقة لطفله فقط، ولا يعدّل ولا يحذف
+      match /entries/{entry} {
+        allow read: if isMember(fid) && tableKid(fid) != '';
+        allow create: if isMember(fid) && tableKid(fid) != ''
+          && request.resource.data.keys().hasOnly(['date', 'kidId', 'taskId', 'approved', 'device', 'createdAt'])
+          && request.resource.data.keys().hasAll(['date', 'kidId', 'taskId', 'approved', 'createdAt'])
+          && request.resource.data.approved == false
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.date is string && request.resource.data.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          && request.resource.data.kidId is string && request.resource.data.kidId.size() <= 40
+          && request.resource.data.taskId is string && request.resource.data.taskId.size() <= 40
+          && (!('device' in request.resource.data) || (request.resource.data.device is string && request.resource.data.device.size() <= 40))
+          && (tableKid(fid) == '*' || tableKid(fid) == request.resource.data.kidId);
       }
 
       // الجهاز يسجّل نفسه برمز صالح لهذه العائلة، ويستطيع حذف نفسه.
@@ -56,11 +80,13 @@ service cloud.firestore {
       match /chatUsers/{uid} {
         allow read: if isMember(fid);
         allow create, update: if isMember(fid) && request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['name', 'avatar', 'role', 'look', 'seen', 'at', 'left', 'root'])
+          && request.resource.data.keys().hasOnly(['name', 'avatar', 'role', 'look', 'seen', 'at', 'left', 'root', 'marks'])
           && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 30
           && request.resource.data.avatar is string && request.resource.data.avatar.size() <= 40
           && request.resource.data.role in ['kid', 'adult']
           && (!('left' in request.resource.data) || request.resource.data.left is number)
+          // marks: آخر ما وصل هذا الفرد (d) وآخر ما قرأه (r) في كل غرفة، لعلامات الصحّين
+          && (!('marks' in request.resource.data) || (request.resource.data.marks is map && request.resource.data.marks.size() <= 200))
           && (!('root' in request.resource.data) || (request.resource.data.root is string && request.resource.data.root.size() <= 128));
         allow delete: if isMember(fid) && request.auth.uid == uid;
         // إعادة الربط: جهاز انضم برمز «R|معرّف الملف» يكتب نفسه وريثاً لهذا الملف المفصول،

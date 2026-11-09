@@ -250,6 +250,8 @@ textarea.text-in { margin-top: 10px; }
 .who { display: block; font-size: 14px; margin-bottom: 1px; }
 .text { white-space: normal; }
 .meta { display: block; font-size: 11px; color: var(--muted); text-align: end; margin-top: 1px; direction: rtl; }
+.tick { display: inline-block; width: 15px; height: 12px; vertical-align: -2px; fill: none; stroke: var(--muted); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tick.read { stroke: #1a8cff; }
 .is-jumbo .bubble, .is-sticker .bubble { background: none; box-shadow: none; padding: 0 4px; }
 .is-jumbo .text { font-size: 46px; line-height: 1.2; }
 .bubble img { display: block; max-width: 100%; max-height: 340px; border-radius: 16px; margin: 2px 0 4px; cursor: zoom-in; }

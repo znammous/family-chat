@@ -155,6 +155,35 @@
     const at = msgs.length ? msgs[msgs.length - 1].at : 0;
     if (at > (read[r] || 0)) { read[r] = at; ls.set('family-chat-read', read); }
   }
+  // ───── علامات الصحّين ─────
+  // آخر رسالة من غيري في الغرفة؛ لا نسجّل وصولاً أو قراءة للأخبار ولا لمحادثات الأبناء التي يطالعها ولي الأمر
+  const tracksMarks = r => r !== 'news' && canWrite(r);
+  function lastFromOthers(r) {
+    const msgs = Cloud.msgsOf(r);
+    for (let i = msgs.length - 1; i >= 0; i--) if (!isMe(msgs[i].from)) return msgs[i].at;
+    return 0;
+  }
+  const deliver = r => { if (Cloud.me() && tracksMarks(r)) Cloud.mark(r, 'd', lastFromOthers(r)); };
+  // تُحسب مقروءة فقط إن كانت المحادثة أمام صاحبها فعلاً وهو عند آخرها
+  function seeRoom() {
+    if (!room || !$('msgs') || !stick || !Cloud.me() || !tracksMarks(room)) return;
+    if (document.visibilityState === 'visible' && document.hasFocus()) Cloud.mark(room, 'r', lastFromOthers(room));
+  }
+  // 1 صح واحد: وصلت الخادم | 2 صحّان: وصلت جهاز الطرف الآخر | 3 صحّان أزرقان: قرأها
+  // في المجموعات تتقدّم العلامة حين يبلغها الجميع، ومن انضم بعد الرسالة لا يُحسب
+  function tickOf(r, m) {
+    const people = r.startsWith('dm_')
+      ? dmPeers(r).filter(p => p !== myKey()).map(userOf).filter(Boolean)
+      : active().filter(u => !isMe(u.id) && (u.at || 0) <= m.at);
+    if (!people.length) return 1;
+    const mk = u => (u.marks && u.marks[r]) || {};
+    if (people.every(u => (mk(u).r || 0) >= m.at)) return 3;
+    return people.every(u => Math.max(mk(u).d || 0, mk(u).r || 0) >= m.at) ? 2 : 1;
+  }
+  const TICK_PATH = { 1: 'M5 6.5 8 9.5 14 2.5', 2: 'M1 6.5 4 9.5 10 2.5M6.5 8.5 7.5 9.5 13.5 2.5' };
+  const TICK_NAME = ['', 'أُرسلت', 'وصلت', 'قُرئت'];
+  const tickSvg = n => `<svg class="tick ${n === 3 ? 'read' : ''}" viewBox="0 0 15 12" role="img" aria-label="${TICK_NAME[n]}"><path d="${TICK_PATH[Math.min(n, 2)]}"/></svg>`;
+
   function badge() {
     const n = allRooms().filter(r => canWrite(r)).reduce((s, r) => s + unreadOf(r), 0);
     document.title = n ? `(${n}) مجلس العائلة` : 'مجلس العائلة';
@@ -610,7 +639,7 @@
     const mark = () => { touchAt = Date.now(); };
     ['wheel', 'touchstart', 'touchmove', 'pointerdown', 'keydown'].forEach(ev => box.addEventListener(ev, mark, { passive: true }));
     box.addEventListener('scroll', () => {
-      if (Date.now() - touchAt < 1500) stick = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+      if (Date.now() - touchAt < 1500) { stick = box.scrollHeight - box.scrollTop - box.clientHeight < 120; seeRoom(); }
     }, { passive: true });
     box.addEventListener('load', () => { if (stick) toBottom(); }, true);
     if (window.ResizeObserver) new ResizeObserver(() => { if (stick) toBottom(); }).observe(box);
@@ -646,7 +675,7 @@
           ${m.audio ? voiceBubble(m) : ''}
           ${m.img ? `<img src="${m.img}" alt="صورة" data-act="view" data-arg="${room}|${m.id}">` : ''}
           ${m.text ? `<div class="text">${rich(m.text)}</div>` : ''}
-          <span class="meta">${m.edited ? 'معدّلة · ' : ''}${timeOf(m.at)}${mine ? (m.pending ? ' 🕓' : ' ✓') : ''}</span>
+          <span class="meta">${m.edited ? 'معدّلة · ' : ''}${timeOf(m.at)}${mine ? (m.pending ? ' 🕓' : ' ' + tickSvg(tickOf(room, m))) : ''}</span>
         </div>
         ${reactsRow(room, m, false)}
       </div>`;
@@ -655,6 +684,7 @@
     paintVoice();
     if (near) { toBottom(); requestAnimationFrame(() => { if (stick) toBottom(); }); setTimeout(() => { if (stick) toBottom(); }, 300); }
     markRead(room);
+    seeRoom();
     badge();
   }
 
@@ -1623,6 +1653,7 @@
         tryStartRoom();
         if (Cloud.me().look && !ls.get('family-chat-look', null)) { look = Cloud.me().look; ls.set('family-chat-look', look); }
         watchAll();
+        allRooms().forEach(deliver);
         Cloud.beat();
       }
       if (room && $('msgs')) refreshRoom(); else refresh();
@@ -1640,6 +1671,7 @@
       return;
     }
     if (what && what.room) {
+      deliver(what.room);
       alertNew(what.room, what.fresh);
       if (room === what.room && $('msgs')) refreshRoom();
       else if (!room) refresh();
@@ -1649,8 +1681,9 @@
 
   setInterval(() => { if (document.visibilityState === 'visible') Cloud.beat(); }, 30000);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') { Cloud.beat(); if (room) markRead(room); badge(); }
+    if (document.visibilityState === 'visible') { Cloud.beat(); if (room) { markRead(room); seeRoom(); } badge(); }
   });
+  window.addEventListener('focus', seeRoom);
 
   // الضغط على تنبيه يفتح المحادثة
   if (navigator.serviceWorker) {
