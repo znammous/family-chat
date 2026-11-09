@@ -354,7 +354,15 @@ html[data-look="arnooba"] .modal-bg { background: rgba(120, 60, 110, .45); }
 .cam-frame { position: absolute; left: 3%; bottom: calc(118px + env(safe-area-inset-bottom)); pointer-events: none; }
 .cam-frame .char { width: 30vmin; height: 37.5vmin; max-width: 170px; max-height: 212px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .3)); }
 .cam-top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 10px; padding: 12px; padding-top: calc(12px + env(safe-area-inset-top)); background: linear-gradient(rgba(0, 0, 0, .45), transparent); }
+.cam-top { flex-wrap: wrap; }
 .cam-frames { display: flex; gap: 6px; flex-wrap: wrap; }
+.cam-moods { flex: 0 0 100%; display: flex; gap: 6px; overflow-x: auto; padding: 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; touch-action: pan-x; }
+.cam-moods[hidden] { display: none; }
+.cam-moods::-webkit-scrollbar { display: none; }
+.cam-moods button { flex: none; width: 84px; padding: 4px 2px; border-radius: 14px; background: rgba(255, 255, 255, .88); display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; }
+.cam-moods button.on { background: var(--gold); box-shadow: 0 0 0 2px #fff; }
+.cam-moods .char { width: 44px; height: 55px; }
+.cam-moods small { font-size: 10px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; max-width: 100%; }
 .cam-bar { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-around; padding: 18px 12px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0, 0, 0, .55)); }
 .cam-btn { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .9); font-size: 26px; cursor: pointer; flex-shrink: 0; }
 .shutter { width: 78px; height: 78px; border-radius: 50%; background: #fff; border: 6px solid var(--accent); box-shadow: 0 0 0 4px #fff; transition: transform .1s; }

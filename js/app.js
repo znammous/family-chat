@@ -1151,12 +1151,19 @@
   }
 
   // ───── الكاميرا داخل التطبيق ─────
-  // إطارات لطيفة: فلفولة أو أرنوبة تظهر في زاوية الصورة
+  // إطارات لطيفة: فلفولة أو أرنوبة تظهر في زاوية الصورة بالملصق الذي يختاره المستخدم
   const FRAMES = [
     { id: '', name: 'بدون' },
     { id: 'f', name: 'فلفولة', who: 'falfoula', mood: 'cheer' },
     { id: 'a', name: 'أرنوبة', who: 'arnooba', mood: 'love' },
   ];
+  // الإطار المختار يُحفظ بصيغة الملصقات نفسها: «f:cheer»، أو نص فارغ بلا إطار
+  const currentFrame = () => {
+    if (!cam || !cam.frame) return null;
+    const [id, mood] = cam.frame.split(':');
+    const f = FRAMES.find(x => x.id === id);
+    return f ? { ...f, mood: mood || f.mood } : null;
+  };
   let cam = null;   // { stream, facing, kind, frame }
   const camSupported = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   function stopCam() {
@@ -1179,7 +1186,7 @@
     // بلا كاميرا مدعومة: نفتح كاميرا الجهاز عبر مدخل الملفات
     if (!camSupported()) { fallbackCamera(kind); return; }
     const facing = cam ? cam.facing : 'environment';
-    const frame = cam ? cam.frame : (look === 'arnooba' ? 'a' : '');
+    const frame = cam ? cam.frame : (look === 'arnooba' ? 'a:love' : '');
     stopCam();
     cam = { stream: null, facing, kind, frame };
     modal(`<div class="camera">
@@ -1187,7 +1194,8 @@
       <div class="cam-frame" id="camFrame"></div>
       <div class="cam-top">
         <button class="cam-btn" data-act="camClose" aria-label="إغلاق">✖</button>
-        <div class="cam-frames">${FRAMES.map(f => `<button class="chip ${f.id === frame ? 'on' : ''}" data-act="camFrame" data-arg="${f.id}">${f.name}</button>`).join('')}</div>
+        <div class="cam-frames">${FRAMES.map(f => `<button class="chip" data-act="camFrame" data-arg="${f.id}">${f.name}</button>`).join('')}</div>
+        <div class="cam-moods" id="camMoods" hidden></div>
       </div>
       <p class="cam-wait" id="camWait"><span class="spinner"></span> نفتح الكاميرا…</p>
       <div class="cam-bar">
@@ -1226,9 +1234,24 @@
   function paintFrame() {
     const box = $('camFrame');
     if (!box || !cam) return;
-    const f = FRAMES.find(x => x.id === cam.frame);
-    box.innerHTML = f && f.who ? Art.char(f.who, f.mood) : '';
-    document.querySelectorAll('.cam-frames .chip').forEach(b => b.classList.toggle('on', b.dataset.arg === cam.frame));
+    const f = currentFrame();
+    box.innerHTML = f ? Art.char(f.who, f.mood) : '';
+    const id = f ? f.id : '';
+    document.querySelectorAll('.cam-frames .chip').forEach(b => b.classList.toggle('on', b.dataset.arg === id));
+    // شريط ملصقات الشخصية المختارة: يُبنى عند تغيّر الشخصية فقط حتى لا يضيع موضع التمرير
+    const strip = $('camMoods');
+    strip.hidden = !f;
+    if (strip.dataset.id !== id) {
+      strip.dataset.id = id;
+      strip.innerHTML = f ? Art.MOODS.map(m => `<button data-act="camFrame" data-arg="${id}:${m}" aria-label="${Art.MOOD_NAMES[m]}">${Art.char(f.who, m)}<small>${Art.MOOD_NAMES[m]}</small></button>`).join('') : '';
+      strip.scrollLeft = 0;
+    }
+    const chosen = f ? `${id}:${f.mood}` : '';
+    strip.querySelectorAll('button').forEach(b => {
+      const on = b.dataset.arg === chosen;
+      if (on && !b.classList.contains('on')) b.scrollIntoView({ inline: 'center', block: 'nearest' });
+      b.classList.toggle('on', on);
+    });
   }
   async function takeShot() {
     const v = $('camVideo');
@@ -1241,7 +1264,7 @@
     if (cam.facing === 'user') { ctx.translate(w, 0); ctx.scale(-1, 1); }
     ctx.drawImage(v, 0, 0, w, h);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const fimg = await frameImage(FRAMES.find(x => x.id === cam.frame));
+    const fimg = await frameImage(currentFrame());
     if (fimg) {
       const fh = Math.min(w, h) * 0.42, fw = fh * 0.8;
       ctx.drawImage(fimg, w * 0.03, h - fh - h * 0.02, fw, fh);
@@ -1546,7 +1569,13 @@
     camera(kind) { openCamera(kind); },
     camShot() { takeShot(); },
     camFlip() { if (!cam) return; cam.facing = cam.facing === 'user' ? 'environment' : 'user'; openCamera(cam.kind); },
-    camFrame(id) { if (!cam) return; cam.frame = id; paintFrame(); },
+    camFrame(id) {
+      if (!cam) return;
+      // زر الشخصية يُبقي الملصق المختار لها إن كانت هي الظاهرة، وإلا يبدأ بملصقها الافتراضي
+      const f = FRAMES.find(x => x.id === id);
+      cam.frame = f && f.who ? (cam.frame.startsWith(id + ':') ? cam.frame : `${id}:${f.mood}`) : (id || '');
+      paintFrame();
+    },
     camClose() {
       const kind = cam && cam.kind;
       closeModal();

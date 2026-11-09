@@ -286,7 +286,7 @@ const Art = (() => {
     return [...(first === 'arnooba' ? [a, f] : [f, a]), { title: 'إيموجي كبير', list: STICKERS.filter(s => !/^[fa]:/.test(s)) }];
   };
 
-  return { char, sticker, avatar, STICKERS, STICKER_GROUPS, falfoulaSvg, arnoobaSvg };
+  return { char, sticker, avatar, STICKERS, STICKER_GROUPS, MOODS, MOOD_NAMES, falfoulaSvg, arnoobaSvg };
 })();
 
 function esc(s) {
