@@ -2,6 +2,8 @@
 (() => {
   const $ = id => document.getElementById(id);
   const app = $('app');
+  // غلاف شفاف لعناصر الفيديو، وإلا يعرض WebView في أندرويد زر تشغيل رمادياً ضخماً حتى يبدأ البث
+  const NO_POSTER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
   const ls = {
     get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -264,7 +266,7 @@
       <div class="card">
         <p>اطلب من ولي الأمر أن يفتح «العائلة ← أضف فرداً» ثم امسح الرمز:</p>
         <button class="btn green wide" id="scanBtn" data-act="scan">📷 امسح رمز QR</button>
-        <div id="scanBox" class="scan-box" hidden><video id="scanVideo" playsinline muted></video><p class="muted small">وجّه الكاميرا نحو الرمز</p></div>
+        <div id="scanBox" class="scan-box" hidden><video id="scanVideo" playsinline muted poster="${NO_POSTER}"></video><p class="muted small">وجّه الكاميرا نحو الرمز</p></div>
         <p class="or">أو اكتب الرمز</p>
         <input id="codeIn" class="code-in" dir="ltr" maxlength="9" placeholder="XXXX-XXXX" value="${esc(joinCode)}" autocomplete="off" autocapitalize="characters">
         <button class="btn pink wide" data-act="joinTyped">انضم ✨</button>
@@ -1085,7 +1087,7 @@
     stopCam();
     cam = { stream: null, facing, kind, frame };
     modal(`<div class="camera">
-      <video id="camVideo" playsinline muted autoplay class="${facing === 'user' ? 'mirror' : ''}"></video>
+      <video id="camVideo" playsinline muted autoplay poster="${NO_POSTER}" class="${facing === 'user' ? 'mirror' : ''}"></video>
       <div class="cam-frame" id="camFrame"></div>
       <div class="cam-top">
         <button class="cam-btn" data-act="camClose" aria-label="إغلاق">✖</button>
