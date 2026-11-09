@@ -786,6 +786,19 @@
   }
   function closeModal() { stopCam(); const m = $('modal'); m.hidden = true; m.innerHTML = ''; }
 
+  // نافذة «يوجد تحديث» بحجمه، كما في نور الوحي
+  let pendingUpd = null;
+  const sizeText = b => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} ميجابايت` : `${Math.max(1, Math.round(b / 1024))} كيلوبايت`);
+  function showUpdate(u) {
+    pendingUpd = u;
+    modal(`<div class="sheet small">
+      <h3>🔄 يوجد تحديث لمجلس العائلة</h3>
+      <p>فيه ما أُضيف وأُصلح منذ نسختك. حجمه نحو ${sizeText(u.size)}.</p>
+      <p class="muted">رسائلك وإعداداتك باقية كما هي.</p>
+      <div class="row"><button class="btn green" data-act="updNow">🔄 حدّث الآن</button><button class="btn plain" data-act="updLater">لاحقاً</button></div>
+    </div>`);
+  }
+
   function findMsg(r, id) { return Cloud.msgsOf(r).find(m => m.id === id); }
 
   function msgMenu(id) {
@@ -1350,7 +1363,8 @@
       const s = t.selectionStart ?? t.value.length, en = t.selectionEnd ?? t.value.length;
       t.value = t.value.slice(0, s) + e + t.value.slice(en);
       const pos = s + e.length;
-      t.setSelectionRange(pos, pos);
+      // نقل المؤشر في خانة غير مركَّز عليها قد يفتح لوحة المفاتيح في بعض الجوالات
+      if (document.activeElement === t) t.setSelectionRange(pos, pos);
       grow();
       Sound.tap();
     },
@@ -1556,10 +1570,36 @@
     },
     checkUpdate() {
       toast('⏳ جارٍ التحقق…');
-      Native.updateNow().then(st => {
-        if (st === 'none') toast('✅ عندك أحدث إصدار');
-        else if (st === 'apk') toast('يوجد إصدار جديد يحتاج تثبيت ملف APK جديد', 5000);
+      Native.checkUpdate().then(u => {
+        if (u.st === 'none') toast('✅ عندك أحدث إصدار');
+        else if (u.st === 'apk') toast('يوجد إصدار جديد يحتاج تثبيت ملف APK جديد', 5000);
+        else if (u.st === 'busy') toast('⏳ يجري تنزيل التحديث، حاول بعد لحظات');
+        else showUpdate(u);
       }).catch(() => toast('⚠️ تعذّر التحقق، تأكد من الإنترنت'));
+    },
+    updNow() {
+      const u = pendingUpd;
+      if (!u) return;
+      pendingUpd = null;
+      modal(`<div class="sheet small upd-box">
+        <h3>🔄 جارٍ التحديث</h3>
+        <b id="updPct">0%</b>
+        <div class="upd-track"><i id="updBar"></i></div>
+        <p class="muted">أبقِ التطبيق مفتوحاً حتى يكتمل.</p>
+      </div>`);
+      // لا يُغلق بالضغط خارجه أثناء التنزيل
+      $('modal').querySelector('.modal-bg').removeAttribute('data-act');
+      Native.installNow(u, p => {
+        if ($('updPct')) $('updPct').textContent = `${p}%`;
+        if ($('updBar')) $('updBar').style.width = `${p}%`;
+      }).catch(() => { closeModal(); toast('⚠️ تعذّر التحديث، تأكد من الإنترنت وحاول مرة أخرى', 4000); });
+    },
+    updLater() {
+      const u = pendingUpd;
+      pendingUpd = null;
+      closeModal();
+      if (u) Native.installLater(u);
+      toast('✅ سيعمل التحديث في الفتحة التالية للتطبيق');
     },
     saveImage(arg) {
       const [r, id] = arg.split('|');

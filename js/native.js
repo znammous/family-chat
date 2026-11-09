@@ -87,7 +87,7 @@ const Native = (() => {
     if (meta.id === local.id) return { st: 'none' };
     const build = parseInt(info.build, 10) || 0;
     if (build && meta.minBuild && build < meta.minBuild) return { st: 'apk' };
-    return { st: 'new', id: meta.id, tag: rel.tag_name, url: zip.browser_download_url, sha: meta.sha256 };
+    return { st: 'new', id: meta.id, tag: rel.tag_name, url: zip.browser_download_url, sha: meta.sha256, size: zip.size || 0 };
   }
   async function fetchBundle(u) {
     const L = live();
@@ -111,18 +111,35 @@ const Native = (() => {
     } catch (e) { /* يعاد في الفتحة القادمة */ }
     busy = false;
   }
-  // زر «تحقق من التحديث»: يعيد 'none' أو 'apk'، أو يعيد فتح التطبيق على الحزمة الجديدة
-  async function updateNow() {
-    if (!live() || busy) return 'busy';
+  // زر «تحقق من التحديث»: يعيد حالة آخر حزمة ومعها حجمها، ولا ينزّل شيئاً حتى يوافق صاحب الجهاز
+  async function checkUpdate() {
+    if (!live()) throw new Error('no plugin');
+    if (busy) return { st: 'busy' };
     busy = true;
+    try { return await latest(); } finally { busy = false; }
+  }
+  // «حدّث الآن»: ينزّل ويُري التقدم ثم يعيد فتح التطبيق على الحزمة الجديدة
+  async function installNow(u, onProgress) {
+    const L = live();
+    if (!L || busy) return;
+    busy = true;
+    let h = null;
+    try { h = L.addListener('downloadBundleProgress', e => onProgress(Math.round(100 * ((e && e.progress) || 0)))); } catch (e) {}
     try {
-      const u = await latest();
-      if (u.st !== 'new') return u.st;
       await fetchBundle(u);
       lsSet(NEXT, null);
-      await live().reload();
-      return 'new';
-    } finally { busy = false; }
+      await L.reload();
+    } finally {
+      busy = false;
+      Promise.resolve(h).then(x => x && x.remove()).catch(() => {});
+    }
+  }
+  // «لاحقاً»: يُنزَّل في الخلفية ويعمل في الفتحة التالية
+  async function installLater(u) {
+    if (!live() || busy) return;
+    busy = true;
+    try { await fetchBundle(u); lsSet(NEXT, u.id); } catch (e) { /* يعاد في الفتحة القادمة */ }
+    busy = false;
   }
 
   function start() {
@@ -140,5 +157,5 @@ const Native = (() => {
     });
   }
 
-  return { on, plugin, WEB_URL, vibrate, pushToken, pushOff, onRoom, saveImage, updateNow, start };
+  return { on, plugin, WEB_URL, vibrate, pushToken, pushOff, onRoom, saveImage, checkUpdate, installNow, installLater, start };
 })();

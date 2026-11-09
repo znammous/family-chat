@@ -1,6 +1,6 @@
 // يحفظ ملفات المجلس على الجهاز ليفتح بسرعة وبدون إنترنت (الرسائل نفسها يحفظها Firestore)
 // غيّر رقم الإصدار عند تعديل أي ملف حتى يحدَّث الكاش
-const CACHE = 'family-chat-v31';
+const CACHE = 'family-chat-v32';
 const FILES = [
   './',
   'index.html',

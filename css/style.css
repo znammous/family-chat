@@ -394,3 +394,8 @@ html[data-look="arnooba"] .modal-bg { background: rgba(120, 60, 110, .45); }
 .msg.flash .bubble { animation: flashq 1.4s ease-out; }
 @keyframes flashq { 20%, 60% { box-shadow: 0 0 0 4px var(--gold); } }
 .reply-bar:not([hidden]) ~ .recbar { border-radius: 0; box-shadow: none; }
+
+/* نافذة تقدّم التحديث */
+.upd-box { text-align: center; }
+.upd-track { height: 10px; border-radius: 99px; background: var(--line); margin: 10px 0 6px; overflow: hidden; }
+.upd-track i { display: block; height: 100%; width: 0; background: var(--primary); transition: width .3s; }
