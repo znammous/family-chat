@@ -45,6 +45,12 @@ const Native = (() => {
     });
   }
 
+  // زر الرجوع في الجهاز
+  function onBack(fn) {
+    const A = plugin('App');
+    if (A) A.addListener('backButton', e => fn(!!(e && e.canGoBack)));
+  }
+
   // ───── حفظ صورة ─────
   // رابط التنزيل لا يعمل داخل التطبيق، فنفتح نافذة المشاركة ومنها الحفظ أو الإرسال
   async function saveImage(src) {
@@ -157,5 +163,5 @@ const Native = (() => {
     });
   }
 
-  return { on, plugin, WEB_URL, vibrate, pushToken, pushOff, onRoom, saveImage, checkUpdate, installNow, installLater, start };
+  return { on, plugin, WEB_URL, vibrate, pushToken, pushOff, onRoom, onBack, saveImage, checkUpdate, installNow, installLater, start };
 })();
