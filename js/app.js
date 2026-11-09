@@ -585,9 +585,12 @@
     refreshRoom(true);
     paintReply();
     if (canSend(r)) swipeToReply($('msgs'));
+    showPanel();
     const t = $('txt');
     if (t) {
       t.addEventListener('input', grow);
+      // الضغط على خانة الكتابة في الجوال يُظهر لوحة المفاتيح بدل لوحة الإيموجي
+      t.addEventListener('focus', () => { if (panel && 'ontouchstart' in window) { panel = null; showPanel(); } });
       t.addEventListener('keydown', e => {
         // Enter يرسل على لوحة المفاتيح العادية، و Shift+Enter سطر جديد
         if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); actions.sendText(); }
@@ -1302,6 +1305,8 @@
     panel() {
       panel = panel ? null : panelTab;
       showPanel();
+      // على الجوال تحلّ اللوحة محل لوحة المفاتيح، فلا تظهران معاً
+      if (panel && 'ontouchstart' in window) $('txt').blur();
       Sound.tap();
     },
     panelTab(t) {
@@ -1322,11 +1327,9 @@
     sticker(s) {
       Cloud.send(room, { sticker: s, reply: takeReply(room) });
       Sound.send();
-      panel = null;
-      showPanel();
-      // إن كانت لوحة المفاتيح مفتوحة تبقى كما هي ليكمل الكتابة
-      const t = $('txt');
-      if (t && document.activeElement === t) t.focus();
+      // اللوحة تبقى مفتوحة في مكانها ليختار ملصقاً آخر
+      stick = true;
+      toBottom();
     },
     sendText() {
       const t = $('txt');
@@ -1336,7 +1339,6 @@
       t.value = '';
       grow();
       Sound.send();
-      if (panel) { panel = null; showPanel(); }
       stick = true;
       toBottom();
     },
@@ -1552,7 +1554,7 @@
     const fn = actions[el.dataset.act];
     if (fn) { e.preventDefault(); e.stopPropagation(); fn(el.dataset.arg); }
   });
-  // أزرار الإيموجي والملصقات والإرسال لا تأخذ التركيز من خانة الكتابة، فتبقى لوحة مفاتيح الجوال مفتوحة
+  // أزرار الإيموجي والملصقات والإرسال لا تأخذ التركيز من خانة الكتابة
   // والإيموجي يُكتب في مكان المؤشر داخل النص حتى يُرسل
   document.addEventListener('mousedown', e => {
     if (document.activeElement && document.activeElement.id === 'txt'
