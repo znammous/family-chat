@@ -110,7 +110,8 @@ const Cloud = (() => {
       users = {};
       snap.docs.forEach(d => { users[d.id] = { id: d.id, ...d.data() }; });
       if (!snap.metadata.fromCache || users[u.uid]) usersReady = true;
-      status = snap.metadata.fromCache ? 'offline' : 'ok';
+      // أثناء إعادة الاتصال (revive) تأتي نسخة محلية مؤقتة، فلا نُظهر «بلا اتصال» بسببها
+      status = !snap.metadata.fromCache ? 'ok' : reviving ? status : 'offline';
       // تغيّر «آخر ظهور» وحده يصل من كل فرد كل دقيقة تقريباً، ولا يستحق إعادة رسم المحادثة
       // ترتيب الحقول يختلف بين النسخة المحلية ونسخة الخادم، فنرتّبها قبل المقارنة
       const canon = v => (v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().map(k => [k, canon(v[k])]) : v);
@@ -342,6 +343,22 @@ const Cloud = (() => {
     snap.docs.forEach(d => dropMedia(d.data()));
   }
 
+  // ───── إعادة الاتصال عند العودة ─────
+  // إن انقطع اتصال Firestore في الخلفية تتباعد محاولاته حتى دقيقة كاملة ولا يختصرها رجوع التطبيق،
+  // فيُفتح التنبيه على نسخة قديمة بلا رسالته. قطع الشبكة وإعادتها يبدأ الاتصال فوراً، والكتابات المعلّقة تبقى
+  let reviving = false, revivedAt = 0;
+  async function revive() {
+    if (!fb || !user || !fid || reviving || !navigator.onLine || Date.now() - revivedAt < 3000) return;
+    reviving = true;
+    revivedAt = Date.now();
+    try {
+      await fb.fs.disableNetwork(fb.db);
+      await fb.fs.enableNetwork(fb.db);
+    } catch (e) { /* تكمل Firestore محاولاتها المعتادة */ }
+    // نمهل الاتصال قليلاً؛ فإن لم يعد بعدها فالجهاز بلا اتصال فعلاً
+    setTimeout(() => { reviving = false; }, 5000);
+  }
+
   // ───── الغرف والرسائل ─────
   // كل غرفة تُتابَع بآخر limit رسالة؛ الغرفة المفتوحة تُتابَع بعدد أكبر
   function watch(room, limit = 40) {
@@ -562,7 +579,7 @@ const Cloud = (() => {
   return {
     start, signIn, signOut, join, createCode, saveProfile, beat, mark, removeMember, forget, setDmOff, grant, revoke,
     groups, addGroup, renameGroup, removeGroup,
-    watch, shrink, more, hasMore, msgsOf, send, react, edit, editNews, remove,
+    revive, watch, shrink, more, hasMore, msgsOf, send, react, edit, editNews, remove,
     watchComments, commentsOf, addComment, delComment,
     pushSupported, enablePush, disablePush, pushOn: () => !!ls.get(PUSH_KEY),
     on: fn => listeners.push(fn),

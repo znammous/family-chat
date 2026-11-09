@@ -1875,19 +1875,24 @@
   });
 
   setInterval(() => { if (document.visibilityState === 'visible') Cloud.beat(); }, 30000);
+  let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') { Cloud.beat(); if (room) { markRead(room); seeRoom(); } badge(); }
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    // غاب التطبيق: قد يكون اتصاله انقطع ورسائله الجديدة لم تصل
+    if (hiddenAt && Date.now() - hiddenAt > 15000) Cloud.revive();
+    hiddenAt = 0;
+    Cloud.beat(); if (room) { markRead(room); seeRoom(); } badge();
   });
   window.addEventListener('focus', seeRoom);
 
   // الضغط على تنبيه يفتح المحادثة
   if (navigator.serviceWorker) {
     navigator.serviceWorker.addEventListener('message', e => {
-      if (e.data && e.data.room && Cloud.role()) openRoom(e.data.room);
+      if (e.data && e.data.room && Cloud.role()) { Cloud.revive(); if (e.data.room !== room) openRoom(e.data.room); }
     });
   }
 
-  Native.onRoom(r => { if (r !== room) { startRoom = r; tryStartRoom(); } });
+  Native.onRoom(r => { Cloud.revive(); if (r !== room) { startRoom = r; tryStartRoom(); } });
 
   paintLook();
   joinFromHash();
