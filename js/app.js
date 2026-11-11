@@ -219,39 +219,54 @@
   }
 
   // ───── حركات الانتقال بين الشاشات مثل واتساب ─────
-  // الدخول لشاشة أعمق تنزلق من جهة البداية، والرجوع تنسحب فيه الشاشة القديمة فوق الجديدة، وتبديل التبويبات ينزلق نحو جهته
+  // الدخول: الشاشة الجديدة تدخل من اليمين إلى اليسار فوق القديمة، والرجوع: الشاشة الحالية تخرج من اليسار إلى اليمين كاشفةً السابقة
+  // بلا شفافية: كل شاشة متحركة تحمل خلفيتها كاملة (التدرّج ونسخة من الزينة)
   const TABS = ['chats', 'news', 'family'];
   const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ANIMS = ['scr-in', 'scr-under', 'scr-next', 'scr-prev'];
   let shown = null;
+  function play(node, cls, done) {
+    node.classList.remove(...ANIMS);
+    void node.offsetWidth;
+    node.classList.add(cls);
+    let over = false;
+    const end = () => { if (over) return; over = true; node.classList.remove(cls); if (done) done(); };
+    node.addEventListener('animationend', e => { if (e.target === node) end(); });
+    setTimeout(end, 700);
+  }
+  // خلفية كاملة داخل العنصر المتحرك: زينة السماء تتحرك معه لأن العنصر المحوَّل يحتوي العناصر الثابتة
+  const withSky = node => { const sky = $('bg').cloneNode(true); sky.removeAttribute('id'); sky.classList.add('scr-sky'); node.prepend(sky); return sky; };
+  function ghostOf(oldEl, oldY, cls) {
+    const ghost = document.createElement('div');
+    ghost.className = 'scr-ghost ' + cls;
+    ghost.setAttribute('aria-hidden', 'true');
+    oldEl.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+    oldEl.style.marginTop = -oldY + 'px';
+    ghost.appendChild(oldEl);
+    withSky(ghost);
+    document.body.appendChild(ghost);
+    const drop = () => ghost.remove();
+    ghost.addEventListener('animationend', drop, { once: true });
+    setTimeout(drop, 700);
+  }
   function animateIn(prev, key, depth, oldEl, oldY) {
     const el = app.firstElementChild;
     if (!prev || prev.key === key || !el || el === oldEl || calm()) return;
-    const play = (node, cls) => {
-      node.classList.remove('scr-push', 'scr-back', 'scr-fade', 'scr-next', 'scr-prev');
-      void node.offsetWidth;
-      node.classList.add(cls);
-      node.addEventListener('animationend', e => { if (e.target === node) node.classList.remove(cls); }, { once: true });
-    };
     if (prev.key.startsWith('home:') && key.startsWith('home:')) {
       const body = el.querySelector('.tab-body');
       if (body) play(body, TABS.indexOf(key.slice(5)) > TABS.indexOf(prev.key.slice(5)) ? 'scr-next' : 'scr-prev');
       return;
     }
-    if (prev.key === 'loading' || key === 'loading' || depth === prev.depth) return play(el, 'scr-fade');
-    if (depth > prev.depth) return play(el, 'scr-push');
-    play(el, 'scr-back');
-    if (!oldEl) return;
-    // الشاشة القديمة تبقى لحظة فوق الجديدة وتنسحب عنها
-    const ghost = document.createElement('div');
-    ghost.className = 'scr-ghost';
-    ghost.setAttribute('aria-hidden', 'true');
-    oldEl.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
-    oldEl.style.marginTop = -oldY + 'px';
-    ghost.appendChild(oldEl);
-    document.body.appendChild(ghost);
-    const drop = () => ghost.remove();
-    ghost.addEventListener('animationend', drop, { once: true });
-    setTimeout(drop, 600);
+    if (!oldEl || prev.key === 'loading' || key === 'loading' || depth === prev.depth) return;
+    // شريط التبويبات الثابت يبقى مكانه: نحرّك ما سواه
+    const parts = el.querySelector(':scope > .tabbar') ? [...el.children].filter(c => !c.classList.contains('tabbar')) : [el];
+    if (depth > prev.depth) {
+      ghostOf(oldEl, oldY, 'scr-left');
+      parts.forEach(p => { const sky = p === el ? withSky(el) : null; play(p, 'scr-in', () => sky && sky.remove()); });
+    } else {
+      ghostOf(oldEl, oldY, 'scr-right');
+      parts.forEach(p => play(p, 'scr-under'));
+    }
   }
 
   function render() {
