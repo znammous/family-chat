@@ -273,9 +273,11 @@ const Art = (() => {
     return `<span class="sticker-emoji">${esc(s || '')}</span>`;
   }
 
-  // صورة الفرد: فلفولة أو أرنوبة أو إيموجي
+  // صورة الفرد: فلفولة أو أرنوبة أو أحد ملصقاتهما أو إيموجي
   function avatar(a, cls = '') {
     if (a === 'falfoula' || a === 'arnooba') return `<span class="av char-av ${cls}">${char(a, 'happy')}</span>`;
+    const m = /^([fa]):(\w+)$/.exec(a || '');
+    if (m && MOODS.includes(m[2])) return `<span class="av char-av ${cls}">${char(m[1] === 'a' ? 'arnooba' : 'falfoula', m[2])}</span>`;
     return `<span class="av ${cls}">${esc(a || '🙂')}</span>`;
   }
 

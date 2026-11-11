@@ -396,6 +396,13 @@ const Ask = (() => {
   // ───── إنشاء الملف ─────
   const AVATARS = ['falfoula', 'arnooba', '🦁', '🐯', '🐼', '🐨', '🦊', '🐰', '🐻', '🐸', '🐵', '🦄', '🐱', '🐶', '🐧', '🦉', '🐢', '🐬', '🦋', '🐝', '🦖', '🐙', '👨', '👩', '🧔', '👵', '👴'];
   let setupAvatar = null, setupLook = null;
+  // الصور: الإيموجي أولاً ثم ملصقات الشخصيتين، وشخصية عالم المستخدم قبل الأخرى
+  const avatarGroups = first => {
+    const moods = p => Art.MOODS.filter(m => m !== 'happy').map(m => p + ':' + m);
+    const f = { title: 'ملصقات فلفولة', list: moods('f') };
+    const a = { title: 'ملصقات أرنوبة', list: moods('a') };
+    return [{ title: '', list: AVATARS }, ...(first === 'arnooba' ? [a, f] : [f, a])];
+  };
   function showSetup() {
     const mine = Cloud.me();
     const [hRole, hName] = joinHint.includes('|') ? joinHint.split('|') : ['', joinHint];
@@ -411,7 +418,8 @@ const Ask = (() => {
         <input id="nameIn" class="text-in" maxlength="30" value="${esc(name)}" placeholder="اكتب اسمك">
         ${parentChips}
         <label class="label">صورتك</label>
-        <div class="avatar-grid">${AVATARS.map(a => `<button class="av-opt ${a === setupAvatar ? 'on' : ''}" data-act="pickAvatar" data-arg="${a}">${Art.avatar(a)}</button>`).join('')}</div>
+        ${avatarGroups(setupLook).map(g => `${g.title ? `<p class="panel-h">${g.title}</p>` : ''}<div class="avatar-grid">${g.list.map(a =>
+          `<button class="av-opt ${a === setupAvatar ? 'on' : ''}" data-act="pickAvatar" data-arg="${a}">${Art.avatar(a)}</button>`).join('')}</div>`).join('')}
         <label class="label">اختر عالمك</label>
         <div class="look-pick">
           <button class="look-opt ${setupLook === 'falfoula' ? 'on' : ''}" data-act="pickLook" data-arg="falfoula">${Art.char('falfoula', 'happy')}<b>عالم فلفولة</b><small>سماء زرقاء وتلال خضراء</small></button>
