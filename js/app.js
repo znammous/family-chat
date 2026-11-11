@@ -1016,6 +1016,7 @@
   const HOLD_MS = 200, LOCK_PX = 70, CANCEL_PX = 110;
   const PLAY_IC = '<svg viewBox="0 0 24 24" fill="#fff"><path d="M8.5 5.2v13.6c0 .8.9 1.3 1.6.8l10-6.8c.6-.4.6-1.2 0-1.6l-10-6.8c-.7-.5-1.6 0-1.6.8z"/></svg>';
   const PAUSE_IC = '<svg viewBox="0 0 24 24" fill="#fff"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg>';
+  const VOICE_AUDIO = { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1, sampleRate: { ideal: 48000 } };
   const fmt = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
   // mp4 أولاً لأنه يعمل على آيفون وأندرويد معاً
   const recType = () => ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
@@ -1064,12 +1065,14 @@
     let stream;
     const openedIn = room;
     recOpening = true;
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+    // تسجيل رسالة لا مكالمة: لا صدى يُلغى، ولا كتم ضوضاء قاسٍ يأكل نبرة الصوت، مع موازنة تلقائية لمستوى الصوت
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: VOICE_AUDIO }); }
     catch (e) { recOpening = false; endHold(); toast(e.name === 'NotAllowedError' ? '🎤 اسمح للتطبيق باستخدام الميكروفون من إعدادات المتصفح' : '🎤 تعذّر فتح الميكروفون', 4000); return; }
     recOpening = false;
     if (room !== openedIn) { stream.getTracks().forEach(t => t.stop()); return; }
     const type = recType();
-    const mr = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), audioBitsPerSecond: 32000 });
+    // AAC يحتاج معدلاً أعلى من Opus ليبقى الصوت نقياً
+    const mr = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), audioBitsPerSecond: /mp4/.test(type) ? 64000 : 48000 });
     rec = { mr, stream, chunks: [], start: Date.now(), cancel: false, room };
     mr.ondataavailable = e => { if (e.data && e.data.size) rec.chunks.push(e.data); };
     mr.onstop = finishRec;
