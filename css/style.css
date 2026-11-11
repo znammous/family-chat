@@ -218,6 +218,10 @@ textarea.text-in { margin-top: 10px; }
 .cm-body p { margin: 4px 0 0; overflow-wrap: anywhere; }
 .cm-new .text-in { flex: 1; min-width: 0; }
 .cm-new .btn { flex: none; }
+.cm-new .cm-emo-btn { flex: none; font-size: 26px; padding: 2px 4px; border-radius: 12px; background: none; border: 0; }
+.cm-new .cm-emo-btn:active { background: var(--primary-light); }
+.cm-emo { max-height: 32dvh; overflow-y: auto; margin-top: 6px; }
+.cm-emo[hidden] { display: none; }
 .reacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .react { display: inline-flex; align-items: center; gap: 3px; padding: 2px 10px; border-radius: 999px; background: #fff; box-shadow: 0 2px 0 var(--line); font-size: 18px; }
 .react small { font-size: 13px; font-weight: 800; color: var(--muted); }

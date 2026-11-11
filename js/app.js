@@ -565,7 +565,9 @@ const Ask = (() => {
     modal(`<div class="sheet">
       <h3>💬 التعليقات</h3>
       <div id="cmList" class="cm-list" data-news="${news}">${commentsHtml(news)}</div>
-      <div class="row cm-new"><input id="cmTxt" class="text-in" maxlength="500" placeholder="اكتب تعليقك…"><button class="btn green" data-act="cmSend" data-arg="${news}">إرسال</button></div>
+      <div class="row cm-new"><button class="cm-emo-btn" data-act="cmEmoTog" aria-label="إيموجي">😊</button><input id="cmTxt" class="text-in" maxlength="500" placeholder="اكتب تعليقك…"><button class="btn green" data-act="cmSend" data-arg="${news}">إرسال</button></div>
+      <div id="cmEmo" class="cm-emo" hidden>${Object.entries(EMOJI).map(([k, v]) =>
+        `<p class="panel-h">${k}</p><div class="emoji-grid">${v.split(' ').map(e => `<button data-act="cmEmo" data-arg="${e}">${e}</button>`).join('')}</div>`).join('')}</div>
       <button class="btn plain wide" data-act="closeModal">إغلاق</button>
     </div>`);
     const l = $('cmList');
@@ -1877,6 +1879,24 @@ const Ask = (() => {
       showNewsModal();
     },
     cmOpen(id) { showComments(id); },
+    // لوحة إيموجي التعليقات: تُفتح تحت الخانة والإيموجي يُكتب في مكان المؤشر
+    cmEmoTog() {
+      const p = $('cmEmo');
+      if (!p) return;
+      p.hidden = !p.hidden;
+      if (!p.hidden) p.scrollTop = 0;
+      Sound.tap();
+    },
+    cmEmo(e) {
+      const t = $('cmTxt');
+      if (!t) return;
+      const s = t.selectionStart ?? t.value.length, en = t.selectionEnd ?? t.value.length;
+      if (t.value.length - (en - s) + e.length > t.maxLength) return;
+      t.value = t.value.slice(0, s) + e + t.value.slice(en);
+      const pos = s + e.length;
+      if (document.activeElement === t) t.setSelectionRange(pos, pos);
+      Sound.tap();
+    },
     cmSend(news) {
       const t = $('cmTxt');
       const text = t ? t.value.trim() : '';
@@ -2064,6 +2084,8 @@ const Ask = (() => {
   document.addEventListener('mousedown', e => {
     if (document.activeElement && document.activeElement.id === 'txt'
       && e.target.closest('#panel button, .composer [data-act="panel"], .composer .txt-send')) e.preventDefault();
+    if (document.activeElement && document.activeElement.id === 'cmTxt'
+      && e.target.closest('#cmEmo button, .cm-new button')) e.preventDefault();
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.id === 'codeIn') actions.joinTyped();
