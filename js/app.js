@@ -1638,6 +1638,15 @@ const Ask = (() => {
     history.pushState({ room: r }, '');
     render();
   }
+  // الضغط على تنبيه: الأخبار صفحة لا محادثة، فنفتح تبويب الأخبار كما يفتحه صاحبه بيده
+  function openFromNotif(r) {
+    if (r !== 'news') { if (r !== room) openRoom(r); return; }
+    tab = 'news';
+    ls.set('family-chat-tab', 'news');
+    if (room || peek) { history.back(); return; }   // يغلقها مستمع popstate ثم يرسم الأخبار
+    render();
+    window.scrollTo(0, 0);
+  }
   function closeRoom() {
     recStop(true);
     if (player) { player.audio.pause(); player = null; }
@@ -2151,7 +2160,7 @@ const Ask = (() => {
     const r = startRoom;
     startRoom = null;
     history.replaceState(history.state, '', location.pathname + location.hash);
-    setTimeout(() => openRoom(r), 0);
+    setTimeout(() => openFromNotif(r), 0);
   }
   Cloud.on(what => {
     if (what === 'status') {
@@ -2233,11 +2242,11 @@ const Ask = (() => {
   // الضغط على تنبيه يفتح المحادثة
   if (navigator.serviceWorker) {
     navigator.serviceWorker.addEventListener('message', e => {
-      if (e.data && e.data.room && Cloud.role()) { Cloud.revive(); if (e.data.room !== room) openRoom(e.data.room); }
+      if (e.data && e.data.room && Cloud.role()) { Cloud.revive(); openFromNotif(e.data.room); }
     });
   }
 
-  Native.onRoom(r => { Cloud.revive(); if (r !== room) { startRoom = r; tryStartRoom(); } });
+  Native.onRoom(r => { Cloud.revive(); startRoom = r; tryStartRoom(); });
 
   paintLook();
   joinFromHash();
