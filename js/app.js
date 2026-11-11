@@ -76,6 +76,7 @@ const Ask = (() => {
   let replyTo = null;       // رسالة نرد عليها: { room, id }
   let deferred = false;     // إعادة رسم مؤجلة حتى لا يُمسح ما يكتبه المستخدم
   let look = ls.get('family-chat-look', 'falfoula');
+  let mascot = ls.get('family-chat-mascot', '');   // ملصق شخصية الترحيب، وفارغ يعني شخصية العالم
 
   // ───── أدوات صغيرة ─────
   let toastTimer;
@@ -474,7 +475,7 @@ const Ask = (() => {
     const dmNote = !isParent() && Cloud.dmOff()
       ? '<div class="card empty"><p>🔒 أوقف ولي الأمر الرسائل الخاصة حالياً، ويمكنك مراسلته هو.</p><p class="muted small">تكلّم مع الجميع في «بيت العائلة» 🏡</p></div>' : '';
     const famIcon = `<span class="av family-av">🏡</span>`;
-    let h = `<div class="falfoula-talk">${Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'happy', 'talk')}<p>${greeting()}</p></div>`;
+    let h = `<div class="falfoula-talk"><button class="mascot-btn" data-act="pickMascot" aria-label="غيّر الشخصية">${mascotArt()}</button><p>${greeting()}</p></div>`;
     h += `<div class="card list">${roomRow('family', famIcon, '🏡 بيت العائلة')}${groupRows()}</div>`;
     h += '<h3 class="section">💌 رسائل خاصة</h3>' + dmNote;
     if (!fam.length && dmNote) {
@@ -501,6 +502,22 @@ const Ask = (() => {
     'كلمة حلوة تصنع يوماً سعيداً 🌈',
     'لا تنسَ أن تقول: أحبكم ❤️',
   ];
+  // شخصية الترحيب: ملصق يختاره المستخدم أو شخصية عالمه
+  function mascotArt() {
+    const m = /^([fa]):(\w+)$/.exec(mascot || '');
+    if (m && Art.MOODS.includes(m[2])) return Art.char(m[1] === 'a' ? 'arnooba' : 'falfoula', m[2], 'talk');
+    if (mascot && !m) return `<span class="char talk mascot-emoji">${esc(mascot)}</span>`;
+    return Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'happy', 'talk');
+  }
+  function mascotSheet() {
+    const cell = (s, art) => `<button class="${mascot === s ? 'on' : ''}" data-act="setMascot" data-arg="${s}">${art}</button>`;
+    modal(`<div class="sheet">
+      <h3>🎨 اختر شخصية الترحيب</h3>
+      <div class="sticker-grid mascot-grid">${cell('', `<span class="sticker-art">${Art.char(look === 'arnooba' ? 'arnooba' : 'falfoula', 'happy', 'big')}<b>الأصلية</b></span>`)}</div>
+      ${Art.STICKER_GROUPS(look).map(g => `<p class="panel-h">${g.title}</p><div class="sticker-grid mascot-grid">${g.list.map(s => cell(s, Art.sticker(s))).join('')}</div>`).join('')}
+      <button class="btn plain wide" data-act="closeModal">إغلاق</button>
+    </div>`);
+  }
   function greeting() {
     const h = new Date().getHours();
     if (h < 11) return 'صباح الخير! ☀️ ' + GREETINGS[new Date().getDate() % GREETINGS.length];
@@ -1737,6 +1754,8 @@ const Ask = (() => {
       Cloud.setDmOff(off).then(() => toast(off ? '🔒 أُوقفت الرسائل الخاصة' : '💌 عادت الرسائل الخاصة')).catch(() => toast('⚠️ تعذّر الحفظ، تأكد من الإنترنت'));
     },
 
+    pickMascot() { mascotSheet(); Sound.tap(); },
+    setMascot(m) { mascot = m || ''; ls.set('family-chat-mascot', mascot); closeModal(); render(); Sound.tap(); },
     setLook(l) { look = l; ls.set('family-chat-look', l); const me = Cloud.me(); Cloud.saveProfile({ ...me, look: l }).catch(() => {}); render(); },
 
     panel() {
