@@ -53,7 +53,7 @@ button { cursor: pointer; border: 0; background: none; }
 a { color: var(--primary-dark); }
 
 /* المشهد: شمس وسحب وتلال */
-.bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
 .sun-disc { position: absolute; top: -46px; left: -46px; width: 190px; height: 190px; border-radius: 50%; background: radial-gradient(circle, #fff3b0 0 42%, rgba(255, 214, 90, .55) 58%, rgba(255, 214, 90, 0) 72%); }
 html[data-look="arnooba"] .sun-disc { background: radial-gradient(circle, #fff 0 38%, rgba(255, 190, 215, .55) 58%, rgba(255, 190, 215, 0) 72%); }
 .hill { position: absolute; border-radius: 50%; }
