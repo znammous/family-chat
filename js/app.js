@@ -1,4 +1,55 @@
 // مجلس العائلة: الشاشات والمحادثات. البيانات كلها في cloud.js والرسومات في art.js
+// صناديق السؤال بتنسيق التطبيق بدل صناديق المتصفح الرمادية
+// Ask.yes(نص, {ok, danger}) ← وعد بـ true/false، و Ask.text(نص, قيمة) ← وعد بالنص أو null عند الإلغاء
+const Ask = (() => {
+  let cur = null;
+  function close(v) {
+    if (!cur) return;
+    const { el, res } = cur;
+    cur = null;
+    el.remove();
+    res(v);
+  }
+  function open(text, o, input) {
+    close(input == null ? false : null);
+    return new Promise(res => {
+      const el = document.createElement('div');
+      el.className = 'ask';
+      el.innerHTML = `<div class="ask-bg" data-ask="no"></div>
+        <div class="ask-box" role="alertdialog" aria-modal="true" aria-label="${esc(text)}">
+          <div class="ask-ico">${o.icon || (o.danger ? '⚠️' : '❓')}</div>
+          <p>${esc(text)}</p>
+          ${input != null ? `<input class="text-in ask-in" maxlength="${o.max || 40}" value="${esc(input)}">` : ''}
+          <div class="ask-row">
+            <button class="btn plain" data-ask="no">${esc(o.no || 'إلغاء')}</button>
+            <button class="btn ${o.danger ? 'red' : 'green'}" data-ask="ok">${esc(o.ok || 'نعم')}</button>
+          </div>
+        </div>`;
+      const inp = el.querySelector('.ask-in');
+      const answer = ok => close(input == null ? ok : (ok ? inp.value : null));
+      el.addEventListener('click', e => {
+        const b = e.target.closest('[data-ask]');
+        e.stopPropagation();
+        if (b) answer(b.dataset.ask === 'ok');
+      });
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Escape') answer(false);
+        else if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); answer(true); }
+      });
+      document.body.appendChild(el);
+      cur = { el, res };
+      const f = inp || el.querySelector('[data-ask="ok"]');
+      setTimeout(() => { f.focus(); if (inp) inp.select(); }, 30);
+    });
+  }
+  return {
+    yes: (text, o = {}) => open(text, o, null),
+    text: (text, value = '', o = {}) => open(text, o, value),
+    active: () => !!cur,
+    cancel: () => close(cur && cur.el.querySelector('.ask-in') ? null : false),
+  };
+})();
+
 (() => {
   const $ = id => document.getElementById(id);
   const app = $('app');
@@ -1669,9 +1720,9 @@
     open(r) { openRoom(r); },
     close() { history.back(); },
     peek(id) { peek = id; history.pushState({ peek: id }, ''); render(); window.scrollTo(0, 0); },
-    toggleDm() {
+    async toggleDm() {
       const off = !Cloud.dmOff();
-      if (off && !confirm('إيقاف الرسائل الخاصة بين أفراد العائلة؟ يبقى «بيت العائلة» والأخبار، ويستطيعون مراسلتك أنت على الخاص.')) return;
+      if (off && !await Ask.yes('إيقاف الرسائل الخاصة بين أفراد العائلة؟ يبقى «بيت العائلة» والأخبار، ويستطيعون مراسلتك أنت على الخاص.', { ok: 'إيقاف', icon: '🔒' })) return;
       Cloud.setDmOff(off).then(() => toast(off ? '🔒 أُوقفت الرسائل الخاصة' : '💌 عادت الرسائل الخاصة')).catch(() => toast('⚠️ تعذّر الحفظ، تأكد من الإنترنت'));
     },
 
@@ -1804,9 +1855,9 @@
       if (m && navigator.clipboard) navigator.clipboard.writeText(m.text).then(() => toast('📋 نُسخ النص')).catch(() => {});
       closeModal();
     },
-    delMsg(arg) {
+    async delMsg(arg) {
       const [r, id] = arg.split('|');
-      if (!confirm('حذف هذه الرسالة عند الجميع؟')) return;
+      if (!await Ask.yes('حذف هذه الرسالة عند الجميع؟', { ok: 'حذف', danger: true, icon: '🗑️' })) return;
       Cloud.remove(r, id).catch(() => toast('⚠️ تعذّر الحذف'));
       closeModal();
     },
@@ -1833,8 +1884,8 @@
       t.value = '';
       Cloud.addComment(news, text).catch(() => toast('⚠️ تعذّر إرسال التعليق'));
     },
-    cmDel(id) {
-      if (!confirm('حذف هذا التعليق؟')) return;
+    async cmDel(id) {
+      if (!await Ask.yes('حذف هذا التعليق؟', { ok: 'حذف', danger: true, icon: '🗑️' })) return;
       Cloud.delComment(id).catch(() => toast('⚠️ تعذّر حذف التعليق'));
     },
     newsNoImg() { keepNewsDraft(); newsDraft.img = null; showNewsModal(); },
@@ -1874,9 +1925,9 @@
       const box = document.querySelector('.pair-box');
       if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
     },
-    forget(id) {
+    async forget(id) {
       const u = users()[id];
-      if (!u || !confirm(`حذف ${u.name} نهائياً؟ لن تستطيع إعادة ربطه بنفس الهوية، وتظهر رسائله باسم «فرد سابق».`)) return;
+      if (!u || !await Ask.yes(`حذف ${u.name} نهائياً؟ لن تستطيع إعادة ربطه بنفس الهوية، وتظهر رسائله باسم «فرد سابق».`, { ok: 'حذف نهائياً', danger: true })) return;
       Cloud.forget(id).catch(() => toast('⚠️ تعذّر الحذف'));
     },
     cancelPair() { pairing = null; render(); },
@@ -1894,29 +1945,29 @@
       Sound.pop();
       toast(`🎉 أُنشئت مجموعة ${groupIconPick} ${name}`);
     },
-    renameGroup(id) {
+    async renameGroup(id) {
       const g = groupOf(id);
       if (!g) return;
-      const name = (prompt('الاسم الجديد للمجموعة:', g.name) || '').trim();
+      const name = ((await Ask.text('الاسم الجديد للمجموعة:', g.name, { ok: 'حفظ', icon: '✏️', max: 30 })) || '').trim();
       if (!name || name === g.name) return;
       Cloud.renameGroup(id, name).catch(() => toast('⚠️ تعذّرت إعادة التسمية'));
     },
-    removeGroup(id) {
+    async removeGroup(id) {
       const g = groupOf(id);
-      if (!g || !confirm(`حذف مجموعة «${g.name}»؟ ستُحذف رسائلها كلها ولا يمكن استرجاعها.`)) return;
+      if (!g || !await Ask.yes(`حذف مجموعة «${g.name}»؟ ستُحذف رسائلها كلها ولا يمكن استرجاعها.`, { ok: 'حذف المجموعة', danger: true, icon: '🗑️' })) return;
       Cloud.removeGroup(id).then(() => toast('🗑️ حُذفت المجموعة')).catch(() => toast('⚠️ تعذّر حذف المجموعة'));
     },
-    grantGuardian(id) {
+    async grantGuardian(id) {
       const u = userOf(id);
-      if (!u || !confirm(`منح ${u.name} صلاحيات ولي الأمر؟ سيرى المحادثات الخاصة ويدير العائلة مثلك، في المجلس والألعاب.`)) return;
+      if (!u || !await Ask.yes(`منح ${u.name} صلاحيات ولي الأمر؟ سيرى المحادثات الخاصة ويدير العائلة مثلك، في المجلس والألعاب.`, { ok: 'منح الصلاحيات', icon: '👑' })) return;
       Cloud.grant(id, u.name).then(() => toast(`👑 صار ${u.name} ولي أمر`)).catch(() => toast('⚠️ تعذّر منح الصلاحيات'));
     },
-    revokeGuardian(id) {
-      if (!confirm(`سحب صلاحيات ولي الأمر من ${nameOf(id)}؟ يبقى فرداً في العائلة.`)) return;
+    async revokeGuardian(id) {
+      if (!await Ask.yes(`سحب صلاحيات ولي الأمر من ${nameOf(id)}؟ يبقى فرداً في العائلة.`, { ok: 'سحب الصلاحيات', danger: true })) return;
       Cloud.revoke(id).then(() => toast('تم سحب الصلاحيات')).catch(() => toast('⚠️ تعذّر سحب الصلاحيات'));
     },
-    removeMember(id) {
-      if (!confirm(`فصل ${nameOf(id)} عن العائلة؟ سيُفصل جهازه عن المجلس وعن ألعاب العائلة أيضاً، وتبقى رسائله.`)) return;
+    async removeMember(id) {
+      if (!await Ask.yes(`فصل ${nameOf(id)} عن العائلة؟ سيُفصل جهازه عن المجلس وعن ألعاب العائلة أيضاً، وتبقى رسائله.`, { ok: 'فصل', danger: true })) return;
       Cloud.removeMember(id).then(() => toast('تم الفصل')).catch(() => toast('⚠️ تعذّر الفصل'));
     },
 
@@ -1991,9 +2042,9 @@
       }).catch(() => toast('⚠️ تعذّر حفظ الصورة'));
     },
     toggleMute() { ls.set('family-chat-muted', !ls.get('family-chat-muted', false)); render(); },
-    signOut() {
+    async signOut() {
       const msg = Cloud.owner() ? 'تسجيل الخروج من هذا الجهاز؟' : 'فصل هذا الجهاز عن مجلس العائلة؟ ستحتاج رمزاً جديداً من ولي الأمر للعودة.';
-      if (!confirm(msg)) return;
+      if (!await Ask.yes(msg, { ok: Cloud.owner() ? 'تسجيل الخروج' : 'فصل الجهاز', danger: true, icon: '🚪' })) return;
       room = null;
       peek = null;
       Cloud.signOut();
@@ -2020,6 +2071,7 @@
 
   // زر الرجوع في الجوال يغلق المحادثة بدل الخروج من التطبيق
   const closeTopLayer = () => {
+    if (Ask.active()) { Ask.cancel(); return true; }
     if (Draw.active()) { Draw.cancel(); return true; }
     if (!$('modal').hidden) { closeModal(); return true; }
     return false;

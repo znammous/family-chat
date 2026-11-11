@@ -231,10 +231,10 @@ const Draw = (() => {
     root.remove();
     s = null;
   }
-  function cancel() {
+  async function cancel() {
     if (!s) return;
-    if (s.hist.length && !confirm('تجاهل ما رسمته على الصورة؟')) return;
-    shut();
+    if (s.hist.length && !await Ask.yes('تجاهل ما رسمته على الصورة؟', { ok: 'تجاهل', danger: true, icon: '🎨' })) return;
+    if (s) shut();
   }
   function finish() {
     closeEntry();

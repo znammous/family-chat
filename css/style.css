@@ -130,6 +130,19 @@ html[data-look="arnooba"] .sun-disc { background: radial-gradient(circle, #fff 0
 .btn.plain { background: #fff; color: var(--ink); box-shadow: 0 4px 0 var(--line); }
 .btn.small.pink { box-shadow: 0 4px 0 #d9527f; }
 .btn.small.blue { box-shadow: 0 4px 0 var(--blue-dark); }
+.btn.red { background: #e5533d; box-shadow: 0 6px 0 #a8321f; }
+.btn.red:active { box-shadow: 0 2px 0 #a8321f; }
+.ask { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.ask-bg { position: absolute; inset: 0; background: rgba(20, 50, 40, .5); animation: askFade .15s ease-out; }
+html[data-look="arnooba"] .ask-bg { background: rgba(120, 60, 110, .5); }
+.ask-box { position: relative; width: 100%; max-width: 380px; background: var(--card); border-radius: 28px; padding: 22px 18px 18px; text-align: center; box-shadow: 0 14px 40px rgba(0, 0, 0, .25); animation: askPop .18s ease-out; }
+.ask-ico { font-size: 40px; line-height: 1; margin-bottom: 8px; }
+.ask-box p { margin: 0 0 14px; font-size: 17px; font-weight: 700; line-height: 1.6; color: var(--ink); }
+.ask-in { margin-bottom: 14px; text-align: center; }
+.ask-row { display: flex; gap: 10px; }
+.ask-row .btn { flex: 1; padding: 12px 10px; }
+@keyframes askPop { from { transform: scale(.88); opacity: 0; } }
+@keyframes askFade { from { opacity: 0; } }
 .danger-t { color: #c0392b !important; }
 .link-btn { padding: 8px 10px; color: var(--deep); font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
 .link-btn.danger { color: #c0392b; }
