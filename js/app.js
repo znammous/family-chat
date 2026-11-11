@@ -177,12 +177,14 @@
   }
   // 1 صح واحد: وصلت الخادم | 2 صحّان: وصلت جهاز الطرف الآخر | 3 صحّان أزرقان: قرأها
   // في المجموعات تتقدّم العلامة حين يبلغها الجميع، ومن انضم بعد الرسالة لا يُحسب
+  const audienceOf = (r, m) => r.startsWith('dm_')
+    ? dmPeers(r).filter(p => p !== myKey()).map(userOf).filter(Boolean)
+    : active().filter(u => !isMe(u.id) && (u.at || 0) <= m.at);
+  const markOf = (u, r) => (u.marks && u.marks[r]) || {};
   function tickOf(r, m) {
-    const people = r.startsWith('dm_')
-      ? dmPeers(r).filter(p => p !== myKey()).map(userOf).filter(Boolean)
-      : active().filter(u => !isMe(u.id) && (u.at || 0) <= m.at);
+    const people = audienceOf(r, m);
     if (!people.length) return 1;
-    const mk = u => (u.marks && u.marks[r]) || {};
+    const mk = u => markOf(u, r);
     if (people.every(u => (mk(u).r || 0) >= m.at)) return 3;
     return people.every(u => Math.max(mk(u).d || 0, mk(u).r || 0) >= m.at) ? 2 : 1;
   }
@@ -463,8 +465,11 @@
     const mine = (m.reacts || {})[uid()];
     const list = quick ? QUICK.concat(Object.keys(counts).filter(e => !QUICK.includes(e))) : Object.keys(counts);
     if (!list.length) return '';
+    const act = quick ? e => `data-act="react" data-arg="${r}|${m.id}|${e}"` : () => `data-act="whoReacted" data-arg="${r}|${m.id}"`;
+    const total = Object.keys(m.reacts || {}).length;
     return `<div class="reacts">${list.map(e =>
-      `<button class="react ${mine === e ? 'on' : ''}" data-act="react" data-arg="${r}|${m.id}|${e}">${e}${counts[e] ? `<small>${counts[e]}</small>` : ''}</button>`).join('')}</div>`;
+      `<button class="react ${mine === e ? 'on' : ''}" ${act(e)}>${e}${counts[e] ? `<small>${counts[e]}</small>` : ''}</button>`).join('')}${quick && total
+      ? `<button class="link-btn small" data-act="whoReacted" data-arg="${r}|${m.id}">👥 من تفاعل؟</button>` : ''}</div>`;
   }
 
   function newsTab() {
@@ -969,11 +974,47 @@
       <div class="react-pick">${PICK.map(e =>
         `<button class="${mine === e ? 'on' : ''}" data-act="react" data-arg="${room}|${id}|${e}">${e}</button>`).join('')}${mine && !PICK.includes(mine)
         ? `<button class="on" data-act="react" data-arg="${room}|${id}|${mine}">${mine}</button>` : ''}<button class="more" data-act="reactMore" data-arg="${id}" aria-label="إيموجي آخر">＋</button></div>
+      ${m.from === uid() && !m.pending && tracksMarks(room) ? `<button class="btn plain wide" data-act="msgInfo" data-arg="${id}">ℹ️ معلومات الرسالة</button>` : ''}
+      ${Object.keys(m.reacts || {}).length ? `<button class="btn plain wide" data-act="whoReacted" data-arg="${room}|${id}">👥 التفاعلات (${Object.keys(m.reacts).length})</button>` : ''}
       ${canSend(room) && room !== 'news' ? `<button class="btn plain wide" data-act="reply" data-arg="${id}">↩️ رد</button>` : ''}
       ${edit ? `<button class="btn plain wide" data-act="editMsg" data-arg="${id}">✏️ تعديل الرسالة</button>` : ''}
       ${m.text ? `<button class="btn plain wide" data-act="copy" data-arg="${id}">📋 نسخ النص</button>` : ''}
       ${del ? `<button class="btn plain wide danger-t" data-act="delMsg" data-arg="${room}|${id}">🗑️ حذف الرسالة</button>` : ''}
       <button class="btn plain wide" data-act="closeModal">إغلاق</button>
+    </div>`);
+  }
+
+  const personRow = (u, side) => `<li class="who-row">${Art.avatar(u ? u.avatar : '🙂', 'sm')}<b>${esc(u ? u.name : 'فرد سابق')}</b>${side || ''}</li>`;
+  const whoList = (title, list) => list.length ? `<p class="panel-h">${title} · ${list.length}</p><ul class="who-list">${list.map(u => personRow(u)).join('')}</ul>` : '';
+
+  // معلومات رسالتي: من قرأها ومن وصلته فقط
+  function msgInfo(id) {
+    const m = findMsg(room, id);
+    if (!m) return;
+    const people = audienceOf(room, m);
+    const read = people.filter(u => (markOf(u, room).r || 0) >= m.at);
+    const got = people.filter(u => !read.includes(u) && (markOf(u, room).d || 0) >= m.at);
+    const not = people.filter(u => !read.includes(u) && !got.includes(u));
+    modal(`<div class="sheet small">
+      <h3>ℹ️ معلومات الرسالة</h3>
+      <p class="muted small">${dayOf(m.at)} ${timeOf(m.at)}</p>
+      ${people.length ? whoList(`${tickSvg(3)} قرأها`, read) + whoList(`${tickSvg(2)} وصلته`, got) + whoList(`${tickSvg(1)} لم تصله بعد`, not)
+        : '<p class="muted">لا يوجد أحد آخر في هذه المحادثة بعد.</p>'}
+      <button class="btn plain wide" data-act="msgMenu" data-arg="${id}">رجوع</button>
+    </div>`);
+  }
+
+  // من تفاعل مع الرسالة وبأي إيموجي، وتفاعلي يُزال بالضغط عليه
+  function whoReacted(r, id) {
+    const m = findMsg(r, id);
+    if (!m) return;
+    const rows = Object.entries(m.reacts || {}).sort(([a], [b]) => (b === uid()) - (a === uid()) || nameOf(a).localeCompare(nameOf(b), 'ar'));
+    modal(`<div class="sheet small">
+      <h3>👥 التفاعلات · ${rows.length}</h3>
+      ${rows.length ? `<ul class="who-list">${rows.map(([k, e]) => k === uid()
+        ? `<li><button class="who-row mine" data-act="react" data-arg="${r}|${id}|${e}">${Art.avatar(userOf(k) ? userOf(k).avatar : '🙂', 'sm')}<b>أنت<small>اضغط للإزالة</small></b><span class="who-emo">${e}</span></button></li>`
+        : personRow(userOf(k), `<span class="who-emo">${e}</span>`)).join('')}</ul>` : '<p class="muted">لا تفاعلات بعد.</p>'}
+      ${r === room && r !== 'news' ? `<button class="btn plain wide" data-act="msgMenu" data-arg="${id}">رجوع</button>` : `<button class="btn plain wide" data-act="closeModal">إغلاق</button>`}
     </div>`);
   }
 
@@ -1747,6 +1788,8 @@
       closeModal();
     },
     reactMore(id) { reactMore(id); Sound.tap(); },
+    msgInfo(id) { msgInfo(id); Sound.tap(); },
+    whoReacted(arg) { const [r, id] = arg.split('|'); whoReacted(r, id); Sound.tap(); },
     editMsg(id) { editMsg(id); },
     saveEdit(arg) {
       const [r, id] = arg.split('|');
