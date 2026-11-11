@@ -1902,7 +1902,12 @@ const Ask = (() => {
       const text = t ? t.value.trim() : '';
       if (!text) return;
       t.value = '';
-      Cloud.addComment(news, text).catch(() => toast('⚠️ تعذّر إرسال التعليق'));
+      // تأكيد فوري بالصوت والاهتزاز مثل الرسائل، ثم إشعار حين يصل التعليق إلى الخادم
+      Sound.send();
+      Native.vibrate(30);
+      Cloud.addComment(news, text)
+        .then(() => toast('✅ أُرسل تعليقك', 1800))
+        .catch(() => toast('⚠️ تعذّر إرسال التعليق'));
     },
     async cmDel(id) {
       if (!await Ask.yes('حذف هذا التعليق؟', { ok: 'حذف', danger: true, icon: '🗑️' })) return;
