@@ -1968,10 +1968,26 @@
     if (room) closeRoom();
     else if (peek) { peek = null; render(); }
   });
-  // في التطبيق نغلق النافذة دون لمس سجل الرجوع: إعادة خطوة أُضيفت بلا لمسة تجعل WebView يتجاهل الرجوع بعدها
-  Native.onBack(canGoBack => {
-    if (closeTopLayer()) return;
-    if (room || peek || canGoBack) history.back();
+  // زر الرجوع في التطبيق، كما في نور الوحي: كل ضغطة ترجع خطوة واحدة حتى الشاشة الرئيسية للدردشات،
+  // وفيها تنبيه «اضغط رجوع مرة أخرى للخروج» ثم ضغطة ثانية خلال ثانيتين تغلق التطبيق.
+  // نغلق النوافذ دون لمس سجل الرجوع: إعادة خطوة أُضيفت بلا لمسة تجعل WebView يتجاهل الرجوع بعدها
+  let exitAt = 0;
+  const stepBack = () => {
+    if (closeTopLayer()) return true;
+    if (room && panel) { panel = null; showPanel(); return true; }
+    if (room || peek) { history.back(); return true; }          // يغلقها مستمع popstate
+    if (view === 'setup' && Cloud.me()) { actions.cancelSetup(); return true; }
+    if (view === 'join' && !Cloud.role()) { actions.back(); return true; }
+    if (Cloud.me() && tab !== 'chats') { actions.tab('chats'); return true; }  // الأخبار والعائلة ترجع للدردشات
+    return false;
+  };
+  Native.onBack(() => {
+    let ok;
+    try { ok = stepBack(); } catch (e) { ok = true; }           // تعثّر الرجوع: لا نغلق التطبيق
+    if (ok) { exitAt = 0; return; }
+    if (Date.now() - exitAt < 2000) { Native.exit(); return; }
+    exitAt = Date.now();
+    toast('اضغط رجوع مرة أخرى للخروج', 2000);
   });
 
   // رابط QR مسحته كاميرا الجهاز مباشرة: نفتح شاشة الانضمام والرمز مكتوب فيها

@@ -50,6 +50,11 @@ const Native = (() => {
     const A = plugin('App');
     if (A) A.addListener('backButton', e => fn(!!(e && e.canGoBack)));
   }
+  // الخروج من التطبيق (بعد ضغطتي رجوع متقاربتين في الشاشة الرئيسية)
+  function exit() {
+    const A = plugin('App');
+    try { if (A) A.exitApp(); } catch (e) {}
+  }
 
   // ───── حفظ صورة ─────
   // رابط التنزيل لا يعمل داخل التطبيق، فنفتح نافذة المشاركة ومنها الحفظ أو الإرسال
@@ -163,5 +168,5 @@ const Native = (() => {
     });
   }
 
-  return { on, plugin, WEB_URL, vibrate, pushToken, pushOff, onRoom, onBack, saveImage, checkUpdate, installNow, installLater, start };
+  return { on, plugin, WEB_URL, vibrate, pushToken, pushOff, onRoom, onBack, exit, saveImage, checkUpdate, installNow, installLater, start };
 })();
