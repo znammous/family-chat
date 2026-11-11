@@ -454,3 +454,20 @@ html[data-look="arnooba"] .modal-bg { background: rgba(120, 60, 110, .45); }
 .draw .draw-tool b { font-size: 22px; line-height: 1.1; font-weight: 400; }
 .draw .draw-tool small { font-size: 12px; }
 .draw .draw-tool.on { background: #ffffff2e; }
+
+/* ───── حركات الانتقال بين الشاشات ───── */
+/* نحرّك أبناء الصفحة لا الصفحة نفسها حتى يبقى شريط التبويبات الثابت في مكانه */
+.room.scr-push, .center-screen.scr-push, .page.scr-push > :not(.tabbar) { animation: scrPush .3s cubic-bezier(.2, .8, .25, 1); }
+.room.scr-back, .center-screen.scr-back, .page.scr-back > :not(.tabbar) { animation: scrBack .3s cubic-bezier(.2, .8, .25, 1); }
+.room.scr-fade, .center-screen.scr-fade, .page.scr-fade > :not(.tabbar) { animation: scrFade .25s ease-out; }
+.tab-body.scr-next { animation: scrNext .26s cubic-bezier(.2, .8, .25, 1); }
+.tab-body.scr-prev { animation: scrPrev .26s cubic-bezier(.2, .8, .25, 1); }
+.scr-ghost { position: fixed; inset: 0; z-index: 30; overflow: hidden; pointer-events: none; background: linear-gradient(180deg, var(--sky1) 0%, var(--sky2) 40%, var(--sky3) 72%, var(--sky4) 100%); box-shadow: 0 0 30px rgba(0, 0, 0, .18); animation: scrGhost .28s cubic-bezier(.4, 0, .7, .2) forwards; }
+/* الاتجاه بالعربية: الأمام نحو اليسار */
+@keyframes scrPush { from { transform: translateX(-34%); opacity: 0; } }
+@keyframes scrBack { from { transform: translateX(14%) scale(.98); opacity: .4; } }
+@keyframes scrFade { from { transform: scale(.97); opacity: 0; } }
+@keyframes scrNext { from { transform: translateX(-28px); opacity: 0; } }
+@keyframes scrPrev { from { transform: translateX(28px); opacity: 0; } }
+@keyframes scrGhost { to { transform: translateX(-45%); opacity: 0; } }
+html:has(.scr-ghost), body:has(.scr-push, .scr-back) { overflow-x: hidden; }

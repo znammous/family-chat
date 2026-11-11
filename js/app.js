@@ -204,18 +204,63 @@
     if (m) m.content = look === 'arnooba' ? '#ffdce9' : '#cfeeff';
   }
 
+  // الشاشة المطلوبة الآن: [مفتاحها، عمقها، دالة رسمها]؛ العمق يحدد اتجاه حركة الانتقال
+  function pickScreen() {
+    const st = Cloud.status(), role = Cloud.role();
+    if (view === 'join' && !role) return ['join', 1, showJoin];
+    if (st === 'loading' || st === 'linking') return ['loading', 0, () => showLoading(st === 'linking' ? 'نبحث عن عائلتك…' : 'لحظة…')];
+    if (st === 'unavailable' && !role) return ['welcome', 0, () => showWelcome(true)];
+    if (!role) return ['welcome', 0, () => showWelcome(false)];
+    if (!Cloud.usersReady()) return ['loading', 0, () => showLoading('نجهّز بيت العائلة…')];
+    if (!Cloud.me() || view === 'setup') return ['setup', 1, showSetup];
+    if (room) return ['room:' + room, 2, showRoom];
+    if (peek && isParent() && userOf(peek)) return ['peek:' + peek, 1, showPeek];
+    return ['home:' + tab, 0, showHome];
+  }
+
+  // ───── حركات الانتقال بين الشاشات مثل واتساب ─────
+  // الدخول لشاشة أعمق تنزلق من جهة البداية، والرجوع تنسحب فيه الشاشة القديمة فوق الجديدة، وتبديل التبويبات ينزلق نحو جهته
+  const TABS = ['chats', 'news', 'family'];
+  const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let shown = null;
+  function animateIn(prev, key, depth, oldEl, oldY) {
+    const el = app.firstElementChild;
+    if (!prev || prev.key === key || !el || el === oldEl || calm()) return;
+    const play = (node, cls) => {
+      node.classList.remove('scr-push', 'scr-back', 'scr-fade', 'scr-next', 'scr-prev');
+      void node.offsetWidth;
+      node.classList.add(cls);
+      node.addEventListener('animationend', e => { if (e.target === node) node.classList.remove(cls); }, { once: true });
+    };
+    if (prev.key.startsWith('home:') && key.startsWith('home:')) {
+      const body = el.querySelector('.tab-body');
+      if (body) play(body, TABS.indexOf(key.slice(5)) > TABS.indexOf(prev.key.slice(5)) ? 'scr-next' : 'scr-prev');
+      return;
+    }
+    if (prev.key === 'loading' || key === 'loading' || depth === prev.depth) return play(el, 'scr-fade');
+    if (depth > prev.depth) return play(el, 'scr-push');
+    play(el, 'scr-back');
+    if (!oldEl) return;
+    // الشاشة القديمة تبقى لحظة فوق الجديدة وتنسحب عنها
+    const ghost = document.createElement('div');
+    ghost.className = 'scr-ghost';
+    ghost.setAttribute('aria-hidden', 'true');
+    oldEl.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+    oldEl.style.marginTop = -oldY + 'px';
+    ghost.appendChild(oldEl);
+    document.body.appendChild(ghost);
+    const drop = () => ghost.remove();
+    ghost.addEventListener('animationend', drop, { once: true });
+    setTimeout(drop, 600);
+  }
+
   function render() {
     paintLook();
-    const st = Cloud.status(), role = Cloud.role();
-    if (view === 'join' && !role) return showJoin();
-    if (st === 'loading' || st === 'linking') return showLoading(st === 'linking' ? 'نبحث عن عائلتك…' : 'لحظة…');
-    if (st === 'unavailable' && !role) return showWelcome(true);
-    if (!role) return showWelcome(false);
-    if (!Cloud.usersReady()) return showLoading('نجهّز بيت العائلة…');
-    if (!Cloud.me() || view === 'setup') return showSetup();
-    if (room) return showRoom();
-    if (peek && isParent() && userOf(peek)) return showPeek();
-    return showHome();
+    const [key, depth, draw] = pickScreen();
+    const prev = shown, oldEl = app.firstElementChild, oldY = window.scrollY;
+    shown = { key, depth };
+    draw();
+    animateIn(prev, key, depth, oldEl, oldY);
   }
 
   // لا نعيد رسم شاشة فيها خانة يكتب فيها المستخدم؛ نؤجلها حتى يخرج منها
