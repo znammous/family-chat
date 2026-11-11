@@ -456,7 +456,7 @@ html[data-look="arnooba"] .modal-bg { background: rgba(120, 60, 110, .45); }
 .draw .draw-tool.on { background: #ffffff2e; }
 
 /* ───── حركات الانتقال بين الشاشات ───── */
-#app { position: relative; z-index: 1; }
+#app { position: relative; z-index: 1; overflow-x: clip; }
 .scr-sky { z-index: -1; background: linear-gradient(180deg, var(--sky1) 0%, var(--sky2) 40%, var(--sky3) 72%, var(--sky4) 100%); }
 .scr-in { position: relative; min-height: 100dvh; animation: scrIn .32s cubic-bezier(.2, .75, .2, 1) both; box-shadow: 0 0 28px rgba(0, 0, 0, .2); }
 .scr-under { animation: scrUnder .3s cubic-bezier(.2, .75, .2, 1) both; }
@@ -472,4 +472,3 @@ html[data-look="arnooba"] .modal-bg { background: rgba(120, 60, 110, .45); }
 @keyframes scrUnder { from { transform: translateX(-30%); } }
 @keyframes scrNext { from { transform: translateX(-60px); } }
 @keyframes scrPrev { from { transform: translateX(60px); } }
-html:has(.scr-ghost) { overflow-x: hidden; }
