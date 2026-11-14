@@ -1,5 +1,5 @@
 rules_version = '2';
-// قواعد مشروع Firebase المشترك (tablehero-d582b) بين جدول الأبطال وأبطال الغابة وأبطال الإملاء وشات العائلة.
+// قواعد مشروع Firebase المشترك (tablehero-d582b) بين جدول الأبطال وأبطال الغابة وأبطال الإملاء وشات العائلة وضيفنا الجديد.
 // تُنشر بـ: firebase deploy --only firestore:rules --project tablehero-d582b
 // هذا الملف متطابق في المشاريع الأربعة: أي تعديل فيه يُنسخ إليها كلها قبل النشر.
 service cloud.firestore {
@@ -39,6 +39,18 @@ service cloud.firestore {
       // أجهزة الأطفال تصل إلى بيانات أبطال الغابة وأبطال الإملاء فقط
       match /apps/{app} {
         allow read, write: if app in ['jungleHero', 'jungleDuel', 'jungleOnline', 'spellingHero', 'spellingDuel', 'spellingOnline'] && isMember(fid);
+      }
+
+      // ضيفنا الجديد: أجهزة العائلة تقرأ موعد الولادة فقط (يكتبه ولي الأمر بالقاعدة العامة)،
+      // وترسل «قلبًا لماما» دون تعديل أو حذف. البيانات الطبية في sehatty/ تبقى لأولياء الأمر وحدهم.
+      match /apps/sehattyKids {
+        allow read: if isMember(fid);
+        match /hearts/{h} {
+          allow create: if isMember(fid)
+            && request.resource.data.keys().hasOnly(['t', 'name'])
+            && request.resource.data.t == request.time
+            && request.resource.data.name is string && request.resource.data.name.size() <= 40;
+        }
       }
 
       // جدول الأبطال: جهاز الطفل يقرأ نسخة عامة بلا رمز ولي الأمر يكتبها ولي الأمر (بالقاعدة العامة)
