@@ -51,6 +51,36 @@ service cloud.firestore {
             && request.resource.data.t == request.time
             && request.resource.data.name is string && request.resource.data.name.size() <= 40;
         }
+        // دفتر ذكرياتنا: كل أجهزة العائلة تقرأ الدفتر وتكتب فيه، وكل جهاز يعدّل ما كتبه ويحذفه فقط
+        // (وأولياء الأمر يحذفون أي ذكرى بالقاعدة العامة). الصورة في diaryImg بنفس المعرّف.
+        function diaryEntry(d) {
+          return d.keys().hasOnly(['m', 'name', 'role', 'mood', 'text', 't', 'uid', 'img'])
+            && d.uid == request.auth.uid
+            && d.m is int && d.m >= 1 && d.m <= 10
+            && d.name is string && d.name.size() <= 40
+            && d.role in ['mom', 'dad', 'kid']
+            && d.mood is string && d.mood.size() <= 12
+            && d.text is string && d.text.size() <= 2000
+            && d.t is number && d.img is bool;
+        }
+        match /diary/{e} {
+          allow read: if isMember(fid);
+          allow create: if isMember(fid) && diaryEntry(request.resource.data);
+          allow update: if isMember(fid) && resource.data.uid == request.auth.uid && diaryEntry(request.resource.data);
+          allow delete: if isMember(fid) && resource.data.uid == request.auth.uid;
+        }
+        match /diaryImg/{e} {
+          allow read: if isMember(fid);
+          allow create: if isMember(fid)
+            && request.resource.data.keys().hasOnly(['d', 'uid'])
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.d is string && request.resource.data.d.size() <= 700000;
+          allow update: if isMember(fid) && resource.data.uid == request.auth.uid
+            && request.resource.data.keys().hasOnly(['d', 'uid'])
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.d is string && request.resource.data.d.size() <= 700000;
+          allow delete: if isMember(fid) && resource.data.uid == request.auth.uid;
+        }
       }
 
       // جدول الأبطال: جهاز الطفل يقرأ نسخة عامة بلا رمز ولي الأمر يكتبها ولي الأمر (بالقاعدة العامة)
